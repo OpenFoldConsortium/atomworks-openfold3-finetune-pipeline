@@ -1,0 +1,162 @@
+# electronic Ligand Builder and Optimisation Workbench (eLBOW)
+#   - a module of PHENIX version 1.21.2-5419-
+#   - file written: Thu Oct  2 10:06:24 2025
+#
+#   Input file: /wynton/group/fraser/gcorrey/avoidome/xray_processing/ligand_cifs/lig_prep_pdbs/EE_1_L17/EE_1_L17.pdb
+#   Final geometry file: /wynton/group/fraser/gcorrey/avoidome/xray_processing/ligand_cifs/lig_prep_pdbs/EE_1_L17/EE_1_L17.pdb
+#   Random seed: 3628800
+#
+data_comp_list
+loop_
+_chem_comp.id
+_chem_comp.three_letter_code
+_chem_comp.name
+_chem_comp.group
+_chem_comp.number_atoms_all
+_chem_comp.number_atoms_nh
+_chem_comp.desc_level
+LIG        LIG 'Unknown                  ' ligand 17 12 .
+#
+data_comp_LIG
+#
+loop_
+_chem_comp_atom.comp_id
+_chem_comp_atom.atom_id
+_chem_comp_atom.type_symbol
+_chem_comp_atom.type_energy
+_chem_comp_atom.charge
+_chem_comp_atom.partial_charge
+_chem_comp_atom.x
+_chem_comp_atom.y
+_chem_comp_atom.z
+LIG         O1     O   O      0    .      -0.6140    1.0940    0.0030
+LIG         C1     C   C      0    .      -0.0330   -0.0130   -0.0040
+LIG         C2     C   CH2    0    .       1.4960    0.0000   -0.0280
+LIG         C3     C   CR6    0    .       1.9960    0.0010    1.4080
+LIG         C4     C   CR16   0    .       2.2330   -1.2190    2.0770
+LIG         C5     C   CR6    0    .       2.7020   -1.2190    3.4050
+LIG        CL1     CL  CL     0    .       2.9910   -2.7140    4.2170
+LIG         C6     C   CR16   0    .       2.9370    0.0000    4.0690
+LIG         C7     C   CR6    0    .       2.7020    1.2200    3.4050
+LIG        CL2     CL  CL     0    .       2.9920    2.7140    4.2190
+LIG         C8     C   CR16   0    .       2.2330    1.2210    2.0770
+LIG         O2     O   OC     0    .      -0.5940   -1.1310    0.0030
+LIG         H1     H   HCH2   0    .       1.8475    0.8943   -0.5397
+LIG         H2     H   HCH2   0    .       1.8626   -0.8860   -0.5437
+LIG         H3     H   HCR6   0    .       2.0587   -2.1618    1.5635
+LIG         H4     H   HCR6   0    .       3.3162   -0.0002    5.0881
+LIG         H5     H   HCR6   0    .       2.0522    2.1640    1.5662
+#
+loop_
+_chem_comp_bond.comp_id
+_chem_comp_bond.atom_id_1
+_chem_comp_bond.atom_id_2
+_chem_comp_bond.type
+_chem_comp_bond.value_dist
+_chem_comp_bond.value_dist_esd
+LIG   O1      C1    deloc         1.250 0.020
+LIG   C1      C2    single        1.529 0.020
+LIG   C1      O2    deloc         1.251 0.020
+LIG   C2      C3    single        1.521 0.020
+LIG   C2      H1    single        1.091 0.020
+LIG   C2      H2    single        1.091 0.020
+LIG   C3      C4    aromatic      1.411 0.020
+LIG   C3      C8    aromatic      1.411 0.020
+LIG   C4      C5    aromatic      1.408 0.020
+LIG   C4      H3    single        1.081 0.020
+LIG   C5     CL1    single        1.726 0.020
+LIG   C5      C6    aromatic      1.408 0.020
+LIG   C6      C7    aromatic      1.409 0.020
+LIG   C6      H4    single        1.080 0.020
+LIG   C7     CL2    single        1.726 0.020
+LIG   C7      C8    aromatic      1.408 0.020
+LIG   C8      H5    single        1.080 0.020
+#
+loop_
+_chem_comp_angle.comp_id
+_chem_comp_angle.atom_id_1
+_chem_comp_angle.atom_id_2
+_chem_comp_angle.atom_id_3
+_chem_comp_angle.value_angle
+_chem_comp_angle.value_angle_esd
+LIG   O2      C1      C2          117.14 3.000
+LIG   O2      C1      O1          125.66 3.000
+LIG   C2      C1      O1          117.21 3.000
+LIG   H2      C2      H1          107.29 3.000
+LIG   H2      C2      C3          110.40 3.000
+LIG   H1      C2      C3          110.38 3.000
+LIG   H2      C2      C1          110.21 3.000
+LIG   H1      C2      C1          110.27 3.000
+LIG   C3      C2      C1          108.30 3.000
+LIG   C8      C3      C4          119.62 3.000
+LIG   C8      C3      C2          120.23 3.000
+LIG   C4      C3      C2          120.15 3.000
+LIG   H3      C4      C5          119.88 3.000
+LIG   H3      C4      C3          119.93 3.000
+LIG   C5      C4      C3          120.19 3.000
+LIG   C6      C5     CL1          120.02 3.000
+LIG   C6      C5      C4          120.02 3.000
+LIG  CL1      C5      C4          119.96 3.000
+LIG   H4      C6      C7          120.00 3.000
+LIG   H4      C6      C5          120.02 3.000
+LIG   C7      C6      C5          119.98 3.000
+LIG   C8      C7     CL2          120.00 3.000
+LIG   C8      C7      C6          120.04 3.000
+LIG  CL2      C7      C6          119.96 3.000
+LIG   H5      C8      C7          119.89 3.000
+LIG   H5      C8      C3          119.96 3.000
+LIG   C7      C8      C3          120.15 3.000
+#
+loop_
+_chem_comp_tor.comp_id
+_chem_comp_tor.id
+_chem_comp_tor.atom_id_1
+_chem_comp_tor.atom_id_2
+_chem_comp_tor.atom_id_3
+_chem_comp_tor.atom_id_4
+_chem_comp_tor.value_angle
+_chem_comp_tor.value_angle_esd
+_chem_comp_tor.period
+LIG CONST_01       C6      C5      C4      C3           -0.05   0.0 0
+LIG CONST_02       C6      C7      C8      C3            0.05   0.0 0
+LIG CONST_03       C7      C8      C3      C4           -0.06   0.0 0
+LIG CONST_04       C7      C6      C5      C4            0.04   0.0 0
+LIG CONST_05       C8      C3      C4      C5            0.06   0.0 0
+LIG CONST_06       C8      C7      C6      C5           -0.04   0.0 0
+LIG CONST_07       C5      C4      C3      C2          179.71   0.0 0
+LIG CONST_08       C7      C8      C3      C2         -179.71   0.0 0
+LIG CONST_09      CL1      C5      C4      C3         -179.95   0.0 0
+LIG CONST_10      CL2      C7      C8      C3          179.94   0.0 0
+LIG CONST_11      CL2      C7      C6      C5         -179.93   0.0 0
+LIG CONST_12       C7      C6      C5     CL1          179.94   0.0 0
+LIG CONST_13       H5      C8      C3      C4          179.99   0.0 0
+LIG CONST_14       H4      C6      C5      C4         -178.89   0.0 0
+LIG CONST_15       H3      C4      C5      C6          179.58   0.0 0
+LIG Var_01         C4      C3      C2      C1           89.68  30.0 2
+LIG Var_02         C8      C3      C2      C1          -90.68  30.0 2
+LIG Var_03         H1      C2      C3      C4         -150.61  30.0 2
+LIG Var_04         H2      C2      C3      C4          -30.03  30.0 2
+LIG Var_05         C3      C2      C1      O1           90.23  30.0 3
+LIG Var_06         O2      C1      C2      C3          -89.97  30.0 1
+#
+loop_
+_chem_comp_plane_atom.comp_id
+_chem_comp_plane_atom.plane_id
+_chem_comp_plane_atom.atom_id
+_chem_comp_plane_atom.dist_esd
+LIG plan-1     C2 0.020
+LIG plan-1     C3 0.020
+LIG plan-1     C4 0.020
+LIG plan-1     C5 0.020
+LIG plan-1    CL1 0.020
+LIG plan-1     C6 0.020
+LIG plan-1     C7 0.020
+LIG plan-1    CL2 0.020
+LIG plan-1     C8 0.020
+LIG plan-1     H3 0.020
+LIG plan-1     H4 0.020
+LIG plan-1     H5 0.020
+LIG plan-2     O1 0.020
+LIG plan-2     C1 0.020
+LIG plan-2     C2 0.020
+LIG plan-2     O2 0.020

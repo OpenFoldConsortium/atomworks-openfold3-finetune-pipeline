@@ -1,0 +1,23 @@
+test_artifacts/
+
+# pipeline run output (finetune-pipeline --output-dir, training checkpoints, etc.)
+output/
+
+# the CCD, downloaded into the repo root by the README steps
+chemical_component_dictionary.cif
+
+# pixi environment (rebuilt via `pixi install`)
+.pixi/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# wandb run directories / local settings
+wandb/
+
+# docs build output
+docs/_build/

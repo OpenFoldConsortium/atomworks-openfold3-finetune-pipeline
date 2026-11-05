@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aw-of3-finetune"
+version = "0.1.0"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+
+[project.scripts]
+prepare-inputs = "aw_of3_finetune.cli:prepare_inputs"
+finetune-prep = "aw_of3_finetune.cli:finetune_prep"
+materialize-dataset-cache = "aw_of3_finetune.cli:materialize_dataset_cache"
+generate-msas = "aw_of3_finetune.cli:generate_msas"
+fetch-templates = "aw_of3_finetune.cli:fetch_templates"
+preprocess-templates = "aw_of3_finetune.cli:preprocess_templates"
+generate-train-config = "aw_of3_finetune.cli:generate_train_config"
+split-dataset = "aw_of3_finetune.cli:split_dataset"
+finetune-pipeline = "aw_of3_finetune.cli:finetune_pipeline"
+validate-dataset = "aw_of3_finetune.cli:validate"
+finetune-report = "aw_of3_finetune.cli:finetune_report"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aw_of3_finetune"]
+# The report's node tests are for development only.
+exclude = ["src/aw_of3_finetune/report/assets/test"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: end-to-end tests that touch the CCD and full OF3 pipelines (slow, require CCD file)",
+]

@@ -1,0 +1,20 @@
+# Structure cleanup switches for finetune-prep / finetune-pipeline (--cleanup-config).
+# Every step below is on by default, which reproduces OpenFold3's cleanup_structure_of3;
+# alternate conformers are chosen by atomworks (first letter per chain) instead of OF3's highest occupancy.
+# Copy this file, set the steps you want off to false, and delete the rest if you like:
+# unlisted steps keep their defaults. Misspelled steps are an error.
+# The settings used are written to <output-dir>/cleanup_settings.json.
+#
+# Not switchable (the model needs them): adding unresolved atoms with NaN coordinates,
+# removing terminal OXT/OP3 atoms of standard residues, removing hydrogens.
+
+altloc: first                        # alternate conformers: first (atomworks' first letter per chain) | clash_aware (atomworks, seeded, no clashes) | highest_occupancy (OF3; warns)
+remove_waters: true                  # HOH/DOD
+convert_mse_to_met: true             # selenomethionine -> methionine
+remove_crystallization_aids: true    # X-ray structures only, as in OF3
+remove_small_polymers: true          # polymers of 3 residues or fewer
+remove_fully_unknown_polymers: true  # polymers made only of unknown residues
+remove_clashing_chains: true         # >30% of atoms within 1.7 A of another chain
+remove_non_ccd_atoms: true           # atoms not in the CCD entry (needs --ccd-path)
+remove_chains_with_ca_gaps: true     # consecutive C-alpha atoms more than 10 A apart
+prefilter_bonds: true                # drop inter-chain dative/polymer links, bonds > 2.4 A

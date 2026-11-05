@@ -1,0 +1,89 @@
+data_structure
+#
+loop_
+_chem_comp_bond.pdbx_ordinal 
+_chem_comp_bond.comp_id 
+_chem_comp_bond.atom_id_1 
+_chem_comp_bond.atom_id_2 
+_chem_comp_bond.value_order 
+_chem_comp_bond.pdbx_aromatic_flag 
+_chem_comp_bond.pdbx_stereo_config 
+1  ALA N   CA  SING N ?
+2  ALA N   H   SING N ?
+3  ALA N   H2  SING N ?
+4  ALA CA  C   SING N ?
+5  ALA CA  CB  SING N ?
+6  ALA CA  HA  SING N ?
+7  ALA C   O   DOUB N ?
+8  ALA C   OXT SING N ?
+9  ALA CB  HB1 SING N ?
+10 ALA CB  HB2 SING N ?
+11 ALA CB  HB3 SING N ?
+12 ALA OXT HXT SING N ?
+13 GLY N   CA  SING N ?
+14 GLY N   H   SING N ?
+15 GLY N   H2  SING N ?
+16 GLY CA  C   SING N ?
+17 GLY CA  HA2 SING N ?
+18 GLY CA  HA3 SING N ?
+19 GLY C   O   DOUB N ?
+20 GLY C   OXT SING N ?
+21 GLY OXT HXT SING N ?
+#
+loop_
+_atom_site.group_PDB 
+_atom_site.type_symbol 
+_atom_site.label_atom_id 
+_atom_site.label_alt_id 
+_atom_site.label_comp_id 
+_atom_site.label_asym_id 
+_atom_site.label_entity_id 
+_atom_site.label_seq_id 
+_atom_site.pdbx_PDB_ins_code 
+_atom_site.auth_seq_id 
+_atom_site.auth_comp_id 
+_atom_site.auth_asym_id 
+_atom_site.auth_atom_id 
+_atom_site.pdbx_formal_charge 
+_atom_site.Cartn_x 
+_atom_site.Cartn_y 
+_atom_site.Cartn_z 
+_atom_site.pdbx_PDB_model_num 
+_atom_site.id 
+ATOM N N   . ALA A 1 1 . 1 ALA A N   ? -0.966    0.493  1.5    1 1
+ATOM C CA  . ALA A 1 1 . 1 ALA A CA  ? 0.257     0.418  0.692  1 2
+ATOM C C   . ALA A 1 1 . 1 ALA A C   ? -0.094    0.017  -0.716 1 3
+ATOM O O   . ALA A 1 1 . 1 ALA A O   ? -1.056    -0.682 -0.923 1 4
+ATOM C CB  . ALA A 1 1 . 1 ALA A CB  ? 1.204     -0.62  1.296  1 5
+ATOM O OXT . ALA A 1 1 . 1 ALA A OXT ? 0.661     0.439  -1.742 1 6
+ATOM H H   . ALA A 1 1 . 1 ALA A H   ? -1.383    -0.425 1.482  1 7
+ATOM H H2  . ALA A 1 1 . 1 ALA A H2  ? -0.676    0.661  2.452  1 8
+ATOM H HA  . ALA A 1 1 . 1 ALA A HA  ? 0.746     1.392  0.682  1 9
+ATOM H HB1 . ALA A 1 1 . 1 ALA A HB1 ? 1.459     -0.33  2.316  1 10
+ATOM H HB2 . ALA A 1 1 . 1 ALA A HB2 ? 0.715     -1.594 1.307  1 11
+ATOM H HB3 . ALA A 1 1 . 1 ALA A HB3 ? 2.113     -0.676 0.697  1 12
+ATOM H HXT . ALA A 1 1 . 1 ALA A HXT ? 0.435     0.182  -2.647 1 13
+ATOM N N   . GLY A 1 2 . 2 GLY A N   ? 6.9309998 0.09   -0.034 1 14
+ATOM C CA  . GLY A 1 2 . 2 GLY A CA  ? 5.761     -0.799 -0.008 1 15
+ATOM C C   . GLY A 1 2 . 2 GLY A C   ? 4.502     0.029  -0.005 1 16
+ATOM O O   . GLY A 1 2 . 2 GLY A O   ? 4.571     1.235  -0.023 1 17
+ATOM O OXT . GLY A 1 2 . 2 GLY A OXT ? 3.303     -0.574 0.018  1 18
+ATOM H H   . GLY A 1 2 . 2 GLY A H   ? 6.91      0.738  0.738  1 19
+ATOM H H2  . GLY A 1 2 . 2 GLY A H2  ? 7.788     -0.442 -0.037 1 20
+ATOM H HA2 . GLY A 1 2 . 2 GLY A HA2 ? 5.772     -1.44  -0.889 1 21
+ATOM H HA3 . GLY A 1 2 . 2 GLY A HA3 ? 5.793     -1.415 0.891  1 22
+ATOM H HXT . GLY A 1 2 . 2 GLY A HXT ? 2.523     -0.002 0.019  1 23
+ATOM N N   . ALA A 1 3 . 3 ALA A N   ? 9.034     0.493  1.5    1 24
+ATOM C CA  . ALA A 1 3 . 3 ALA A CA  ? 10.257    0.418  0.692  1 25
+ATOM C C   . ALA A 1 3 . 3 ALA A C   ? 9.906     0.017  -0.716 1 26
+ATOM O O   . ALA A 1 3 . 3 ALA A O   ? 8.944     -0.682 -0.923 1 27
+ATOM C CB  . ALA A 1 3 . 3 ALA A CB  ? 11.204    -0.62  1.296  1 28
+ATOM O OXT . ALA A 1 3 . 3 ALA A OXT ? 10.661    0.439  -1.742 1 29
+ATOM H H   . ALA A 1 3 . 3 ALA A H   ? 8.617     -0.425 1.482  1 30
+ATOM H H2  . ALA A 1 3 . 3 ALA A H2  ? 9.324     0.661  2.452  1 31
+ATOM H HA  . ALA A 1 3 . 3 ALA A HA  ? 10.746    1.392  0.682  1 32
+ATOM H HB1 . ALA A 1 3 . 3 ALA A HB1 ? 11.459    -0.33  2.316  1 33
+ATOM H HB2 . ALA A 1 3 . 3 ALA A HB2 ? 10.715    -1.594 1.307  1 34
+ATOM H HB3 . ALA A 1 3 . 3 ALA A HB3 ? 12.113    -0.676 0.697  1 35
+ATOM H HXT . ALA A 1 3 . 3 ALA A HXT ? 10.435    0.182  -2.647 1 36
+#

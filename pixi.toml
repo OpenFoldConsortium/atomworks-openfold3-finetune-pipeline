@@ -1,0 +1,104 @@
+#
+# pixi (https://pixi.sh) manifest for atomworks-openfold3-finetune-pipeline.
+# TL;DR:
+#   pixi run test                  # pipeline tests
+#
+# Platforms
+# ---------
+# linux-aarch64: where fine-tuning actually runs (GH200). torch arrives from PyPI via
+#                atomworks[ml]; the aarch64 PyPI wheel ships CUDA, so nothing here has
+#                to select a CUDA version explicitly.
+# linux-64:      x86-64 Linux, for running the pipeline and tests on x86 machines.
+# osx-arm64:     laptop, for editing and running the pipeline/tests (the PyPI torch
+#                wheel there is the MPS build). Not intended to run inference or
+#                training.
+#
+# Layout follows openfold-3's pixi.toml: dependencies live in features, environments
+# are composed from features, and anything platform-specific goes in a `target.*`
+# table rather than a separate manifest. One environment:
+#
+#   default: python + pipeline + tests  -- running and testing the pipeline; all platforms.
+#
+
+[workspace]
+name = "atomworks-openfold3-finetune-pipeline"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64"]
+# 0.73: target selectors and `no-default-feature`, same floor as openfold-3.
+requires-pixi = ">=0.73"
+
+# --- Environments
+
+[environments]
+default = { features = ["python", "pipeline", "tests"], solve-group = "main" }
+docs = { features = ["python", "docs"], no-default-feature = true }
+
+# --- Python
+
+[feature.python.dependencies]
+# Pinned to the version the pipeline is tested on (atomworks 3.0 needs >=3.11, openfold3 >=3.10)
+python = "3.12.*"
+pip = "*"
+
+# --- The pipeline: atomworks + openfold3 + this package
+
+# Core scientific stack from conda-forge.
+# Only packages where the conda version won't conflict with atomworks' tight pypi pins.
+# rdkit, pandas, biotite, torch are intentionally left to pypi to avoid pin conflicts.
+[feature.pipeline.dependencies]
+numpy = "*"
+scipy = "*"
+pyyaml = "*"
+ijson = "*"
+tqdm = "*"
+typing-extensions = "*"
+python-lmdb = ">=2.2.0"
+memory_profiler = "*"
+# openfold3 dependencies that are easier from conda-forge than from PyPI:
+# func_timeout -- openfold-3's manifest notes pixi fails to resolve it from PyPI when
+# solving on osx ("no compatible Python interpreter for 'osx-arm64'"); satisfying it
+# from conda-forge sidesteps that for every platform.
+func_timeout = "*"
+# kalign-python -- compiled; conda-forge ships binaries for both platforms.
+kalign-python = "*"
+
+[feature.pipeline.pypi-dependencies]
+# atomworks >=3.0 is the first public release with the ColabFold MSA/template
+# integration (make_msas_colabfold_server_batch, find_template_alignments,
+# template_structures) that generate-msas / fetch-templates rely on.
+# Pinned to the tested public release. It requires biotite 1.6.0; the pipeline also passes
+# its unit tests on biotite 2, for when a public atomworks release moves to it.
+atomworks = { version = "==3.0.4", extras = ["ml"] }
+python-dotenv = "*"  # load_dotenv() for PDB_MIRROR_PATH in fetch-templates; atomworks never loads .env itself
+openfold3 = "==0.5.1"
+aw-of3-finetune = { path = ".", editable = true }
+# pypi owns the tightly-pinned packages to avoid conda/pypi version conflicts
+# biotite: atomworks pins it exactly and checks it at import time.
+biotite = "==1.6.0"
+rdkit = ">=2024.3.5,<2025.9"
+pandas = ">=2.2,<2.4"
+# posebusters: ligand geometry checks in the validation report
+posebusters = "==0.6.5"
+
+# --- Tests and lint
+
+[feature.docs.pypi-dependencies]
+sphinx = ">=8"
+myst-parser = ">=4"
+furo = ">=2024.8.6"
+
+[feature.docs.tasks]
+docs = "sphinx-build -E -W docs/source docs/_build/html"
+
+[feature.tests.dependencies]
+pytest = ">=8"
+pytest-xdist = "*"
+
+[feature.tests.pypi-dependencies]
+ruff = ">=0.15.16, <0.16"
+
+[feature.tests.tasks]
+# Excludes integration tests by default (slow, live network calls) -- run those
+# separately and sporadically via test-integration, not as part of routine test runs.
+test = "pytest src/tests/ -v -m 'not integration'"
+test-integration = "pytest src/tests/ -v -m integration"
