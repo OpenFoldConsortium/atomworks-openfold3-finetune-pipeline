@@ -11,7 +11,7 @@ Run every stage over a directory of mmCIFs.
 | `--cif-dir` | Required | Directory of input mmCIF files. |
 | `--output-dir` | Required | Output directory for every pipeline artifact. |
 | `--msa-dir` | None | MSA directory. |
-| `--ccd-path` | Required | Path to the Chemical Component Dictionary mmCIF (components.cif). |
+| `--ccd-path` | Required | Path to the Chemical Component Dictionary mmCIF. |
 | `--template-cache-dir` | None | Pre-built OpenFold3 template cache directory. |
 | `--name` | `finetune` | Dataset name written into manifest.json. |
 | `--server` | `https://api.colabfold.com` | ColabFold MSA server URL. |
@@ -42,7 +42,7 @@ Turn `.pdb` files and a ligand table into mmCIFs. Run it first, only if you need
 | `--input-dir` | Required | Directory of input .pdb and .cif files. |
 | `--ligands` | Required | Ligand table CSV. |
 | `--output-dir` | Required | Output directory. |
-| `--ccd-path` | Required | Path to the Chemical Component Dictionary mmCIF (components.cif). |
+| `--ccd-path` | Required | Path to the Chemical Component Dictionary mmCIF. |
 | `--release-date` | `2026-01-01` | YYYY-MM-DD for inputs that carry no revision date. |
 | `--constructs` | None | FASTA of the whole sequences crystallised, unmodelled residues included. |
 
@@ -64,7 +64,7 @@ Rebuild the report of a finished dataset.
 |---|---|---|
 | `--output-dir` | Required | Pipeline output directory (manifest.json, dataset_cache.json, cleanup_steps/, ...). |
 | `--cif-dir` | Required | Directory of the original input mmCIF files. |
-| `--ccd-path` | Required | Chemical Component Dictionary mmCIF (components.cif). |
+| `--ccd-path` | Required | Chemical Component Dictionary mmCIF. |
 | `--structures-npz-dir` | None | NPZ structure files root. |
 | `--ids` | None | File with one structure id per line. |
 | `--report-dir` | None | Where to write the report (replaced if it holds an old one). |
@@ -98,7 +98,7 @@ Clean structures and build reference molecules.
 | `--output-dir` | Required | Output directory. |
 | `--msa-dir` | None | MSA directory. Chains missing MSAs are reported as warnings. |
 | `--template-cache-dir` | None | Pre-built OpenFold3 template cache directory. |
-| `--ccd-path` | None | Path to the Chemical Component Dictionary mmCIF (components.cif). |
+| `--ccd-path` | None | Path to the Chemical Component Dictionary mmCIF. |
 | `--name` | `finetune` | Dataset name written into manifest.json. |
 | `--skip-inconsistent` | Off | If a structure's chain metadata disagrees with its atoms, warn and leave it out of the manifest instead of failing. |
 | `--write-step-cifs` / `--no-write-step-cifs` | Off | Also write the atoms after each cleanup step as a CIF under <output-dir>/cleanup_steps/<pdb_id>/ (for viewing. |

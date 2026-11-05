@@ -206,7 +206,7 @@ def _check_paired_dirs_writable(
     "--ccd-path",
     default=None,
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
-    help="Path to the Chemical Component Dictionary mmCIF (components.cif). "
+    help="Path to the Chemical Component Dictionary mmCIF. "
     "When provided, reference molecule SDFs are generated under "
     "<output-dir>/reference_mols/ and embedded in the manifest.",
 )
@@ -360,7 +360,7 @@ def finetune_prep(
     "--ccd-path",
     required=True,
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
-    help="Path to the Chemical Component Dictionary mmCIF (components.cif).",
+    help="Path to the Chemical Component Dictionary mmCIF.",
 )
 @click.option(
     "--release-date",
@@ -925,7 +925,7 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     "--ccd-path",
     required=True,
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
-    help="Path to the Chemical Component Dictionary mmCIF (components.cif). "
+    help="Path to the Chemical Component Dictionary mmCIF. "
     "Required (unlike finetune-prep's own --ccd-path, which is optional there): "
     "without it, the augmented CIF never gets a chem_comp category embedded, and "
     "Stage 4's NPZ conversion (OF3's parse_mmcif) always fails with "
@@ -1253,7 +1253,7 @@ def _write_report(inputs: ValidityInputs, report_dir: Path, ids: list[str] | Non
 @click.option("--cif-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
               help="Directory of the original input mmCIF files.")
 @click.option("--ccd-path", required=True, type=click.Path(path_type=Path, exists=True, dir_okay=False),
-              help="Chemical Component Dictionary mmCIF (components.cif).")
+              help="Chemical Component Dictionary mmCIF.")
 @click.option("--structures-npz-dir", default=None, type=click.Path(path_type=Path, exists=True, file_okay=False),
               help="NPZ structure files root. Defaults to <output-dir>/structure_files.")
 @click.option("--ids", "ids_file", default=None, type=click.Path(path_type=Path, exists=True, dir_okay=False),
