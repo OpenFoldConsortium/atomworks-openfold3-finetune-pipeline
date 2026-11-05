@@ -2,6 +2,8 @@
 
 Turn a directory of structures into an OpenFold3 training dataset, using AtomWorks. You get cleaned structures, MSAs, templates, a `train.yml` and a validation report.
 
+Check out the full documentation at https://atomworks-openfold3-finetune-pipeline.readthedocs.io/en/latest/
+
 ## Install
 
 Clone this repository, then install with [pixi](https://pixi.sh).
