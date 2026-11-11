@@ -5,6 +5,13 @@ build:
   tools:
     python: "3.12"
   jobs:
+    # Skip pull request builds that change nothing under docs/ (exit 183 cancels the build).
+    # Builds of main always run.
+    post_checkout:
+      - |
+        if [ "$READTHEDOCS_VERSION_TYPE" = "external" ] && git diff --quiet origin/main -- docs/ .readthedocs.yaml; then
+          exit 183;
+        fi
     pre_install:
       - pip install "sphinx>=8" "myst-parser>=4" "furo>=2024.8.6"
 
