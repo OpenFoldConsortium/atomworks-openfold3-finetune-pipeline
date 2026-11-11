@@ -277,24 +277,6 @@ def test_leftover_non_report_folder_fails_before_stage_1(cif_protein_monomer, cc
     assert keep.exists()
 
 
-def test_custom_npz_dir_is_used(cif_protein_monomer, ccd_path, tmp_path):
-    """The report reads the NPZ files from --structures-npz-dir, so the entry has no data error."""
-    cif_dir = _single_cif_dir(tmp_path, cif_protein_monomer)
-    out = tmp_path / "out"
-
-    result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
-        "--skip-dataset-load", "--structures-npz-dir", str(tmp_path / "npz"),
-    ], catch_exceptions=False)
-
-    assert result.exit_code == 0, result.output
-    validate_data = inline_report_data((out / "report" / "index.html").read_text())["validate"]
-    actual_entry = validate_data["entries"]["3u8v"]
-    assert "error" not in actual_entry
-    actual_run_checks = [item["check"] for item in validate_data["run_findings"]]
-    assert "validity_data.error" not in actual_run_checks
-
-
 def test_allow_errors_does_not_hide_dataset_level_errors(built_dataset, ccd_path, tmp_path, monkeypatch):
     """A crashing check is a dataset-level error: --allow-errors still exits 1 and drops nothing."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
@@ -340,19 +322,6 @@ def test_validate_cli_honors_custom_cache_path(built_dataset, ccd_path, tmp_path
     assert result.exit_code == 0, result.output
     assert "3u8v" not in json.loads(custom.read_text())["structure_data"]
     assert not (built.output_dir / "dataset_cache.json").exists()
-
-
-def test_validate_cli_honors_custom_npz_dir(built_dataset, ccd_path, tmp_path):
-    """--structures-npz-dir finds NPZ files that were moved out of the output directory."""
-    built = mutable_copy(built_dataset, tmp_path / "copy")
-    moved = tmp_path / "npz"
-    (built.output_dir / "of3_compressed_structures").rename(moved)
-
-    result = CliRunner().invoke(
-        validate, _args(built, ccd_path, "--structures-npz-dir", str(moved)), catch_exceptions=False
-    )
-
-    assert result.exit_code == 0, result.output
 
 
 def test_finetune_pipeline_validates_custom_cache_output(cif_protein_monomer, ccd_path, tmp_path):

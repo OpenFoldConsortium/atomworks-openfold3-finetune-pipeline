@@ -23,16 +23,18 @@ class ValidationContext:
     ccd_path: Path | None = None
     expect_ligands: bool = False
     cache_path: Path | None = None
-    npz_dir: Path | None = None
     _dataset_cache: object = field(default=None, init=False, repr=False)
     _npz: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Default ``cache_path`` and ``npz_dir`` to their locations under ``output_dir``."""
+        """Default ``cache_path`` to its location under ``output_dir``."""
         if self.cache_path is None:
             self.cache_path = self.output_dir / "dataset_cache.json"
-        if self.npz_dir is None:
-            self.npz_dir = self.output_dir / COMPRESSED_STRUCTURES_DIRNAME
+
+    @property
+    def npz_dir(self) -> Path:
+        """Where the pipeline wrote the NPZ files: ``output_dir/of3_compressed_structures``."""
+        return self.output_dir / COMPRESSED_STRUCTURES_DIRNAME
 
     @property
     def dataset_cache(self):

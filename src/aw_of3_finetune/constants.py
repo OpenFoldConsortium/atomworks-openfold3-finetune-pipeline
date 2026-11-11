@@ -25,5 +25,5 @@ TEMPLATE_CUTOFF_NOTE = "templates use a fixed cutoff of"
 # finetune-prep writes the cleaned structures (augmented mmCIFs) into this subdirectory of the output directory.
 CLEANED_STRUCTURES_DIRNAME = "cleaned_structures"
 
-# finetune-pipeline writes the cleaned structures as OF3 NPZ files (<id>/<id>.npz) here unless --structures-npz-dir is given.
+# finetune-pipeline writes the cleaned structures as OF3 NPZ files (<id>/<id>.npz) here; train.yml, split-dataset and the report read them from here.
 COMPRESSED_STRUCTURES_DIRNAME = "of3_compressed_structures"

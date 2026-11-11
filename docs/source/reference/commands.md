@@ -20,7 +20,6 @@ Run every stage over a directory of mmCIFs.
 | `--template-cutoff-date` | None | Keep templates released before this date (YYYY-MM-DD), whatever each structure's own release date. |
 | `--templates` / `--no-templates` | On | Request template hits in generate-msas, then run fetch-templates and preprocess-templates (downloads hit structures from RCSB). |
 | `--cache-output` | None | Path to write the full dataset cache JSON. |
-| `--structures-npz-dir` | None | Where to write NPZ structure files for the training dataloader. |
 | `--skip-inconsistent` | Off | Passed through to finetune-prep. |
 | `--allow-errors` | Off | Passed through to validate. |
 | `--split-csv` | None | CSV with header id,split. |
@@ -65,7 +64,6 @@ Rebuild the report of a finished dataset.
 | `--output-dir` | Required | Pipeline output directory (manifest.json, dataset_cache.json, cleanup_steps/, ...). |
 | `--cif-dir` | Required | Directory of the original input mmCIF files. |
 | `--ccd-path` | Required | Chemical Component Dictionary mmCIF. |
-| `--structures-npz-dir` | None | NPZ structure files root. |
 | `--ids` | None | File with one structure id per line. |
 | `--report-dir` | None | Where to write the report (replaced if it holds an old one). |
 | `--cache-path` | None | The dataset cache JSON (finetune-pipeline's --cache-output). |
@@ -83,7 +81,6 @@ Run the V checks on a dataset.
 | `--template-structure-dir` | None | Template structure directory. |
 | `--ccd-path` | None | Chemical Component Dictionary mmCIF. |
 | `--cache-path` | None | Dataset cache JSON. |
-| `--structures-npz-dir` | None | NPZ structure files root. |
 | `--expect-ligands` / `--no-expect-ligands` | Off | Warn (V4) about entries without any ligand. |
 | `--allow-errors` / `--fail-on-errors` | Off | Drop failing entries from the dataset cache and manifest.json and exit 0, instead of exiting 1. |
 | `--skip-dataset-load` | Off | Skip V21 (loading every entry through OF3's dataset. |
