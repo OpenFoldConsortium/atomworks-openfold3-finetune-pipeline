@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 from openfold3.core.data.io.dataset_cache import read_datacache
 
+from aw_of3_finetune.constants import CLEANED_STRUCTURES_DIRNAME, COMPRESSED_STRUCTURES_DIRNAME
+
 
 @dataclass
 class ValidationContext:
@@ -21,16 +23,18 @@ class ValidationContext:
     ccd_path: Path | None = None
     expect_ligands: bool = False
     cache_path: Path | None = None
-    npz_dir: Path | None = None
     _dataset_cache: object = field(default=None, init=False, repr=False)
     _npz: dict = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Default ``cache_path`` and ``npz_dir`` to their locations under ``output_dir``."""
+        """Default ``cache_path`` to its location under ``output_dir``."""
         if self.cache_path is None:
             self.cache_path = self.output_dir / "dataset_cache.json"
-        if self.npz_dir is None:
-            self.npz_dir = self.output_dir / "structure_files"
+
+    @property
+    def npz_dir(self) -> Path:
+        """Where the pipeline wrote the NPZ files: ``output_dir/of3_compressed_structures``."""
+        return self.output_dir / COMPRESSED_STRUCTURES_DIRNAME
 
     @property
     def dataset_cache(self):
@@ -61,8 +65,8 @@ class ValidationContext:
         return self._npz[entry]
 
     def augmented_cif(self, entry: str) -> Path:
-        """Path to ``structures/<id>.cif``."""
-        return self.output_dir / "structures" / f"{entry}.cif"
+        """Path to ``cleaned_structures/<id>.cif``."""
+        return self.output_dir / CLEANED_STRUCTURES_DIRNAME / f"{entry}.cif"
 
     def source_cif(self, entry: str) -> Path:
         """Path to the input CIF in ``cif_dir`` whose stem matches case-insensitively.

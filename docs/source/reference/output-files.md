@@ -4,8 +4,8 @@
 
 | Path | What it is |
 |---|---|
-| `structures/` | Cleaned structures as mmCIF |
-| `structure_files/` | The same structures as NPZ, which OpenFold3 loads in training |
+| `cleaned_structures/` | Cleaned structures as mmCIF |
+| `of3_compressed_structures/` | The same structures as NPZ, which OpenFold3 loads in training |
 | `reference_mols/` | One SDF per ligand and residue type |
 | `dataset_cache.json` | Index of every structure, chain and interface |
 | `manifest.json` | The structures in the dataset |

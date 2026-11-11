@@ -62,9 +62,12 @@ def check_report_dir(inputs: ValidityInputs, report_dir: Path) -> None:
         ReportDirError: report_dir is or contains the output, CIF, NPZ or working directory, or is an
             existing file or a non-empty folder without the REPORT_MARKER file build_report writes.
     """
-    protected = {"output dir": inputs.out_dir, "CIF dir": inputs.cif_dir, "working directory": Path.cwd()}
-    if inputs.npz_dir is not None:
-        protected["NPZ dir"] = inputs.npz_dir
+    protected = {
+        "output dir": inputs.out_dir,
+        "CIF dir": inputs.cif_dir,
+        "NPZ dir": inputs.npz_dir,
+        "working directory": Path.cwd(),
+    }
     for label, path in protected.items():
         if _holds(report_dir, path):
             raise ReportDirError(f"refusing to write the report to {report_dir}: it is or contains the {label} {path}")
@@ -83,7 +86,7 @@ def _subset(inputs: ValidityInputs, ids: list[str]) -> ValidityInputs:
     if unknown:
         raise ReportError(f"ids not in {inputs.out_dir / 'manifest.json'}: {', '.join(unknown)}")
     return _SubsetInputs(
-        inputs.out_dir, inputs.cif_dir, inputs.ccd_path, inputs.npz_dir, inputs.cache_path, ids=frozenset(ids)
+        inputs.out_dir, inputs.cif_dir, inputs.ccd_path, inputs.cache_path, ids=frozenset(ids)
     )
 
 

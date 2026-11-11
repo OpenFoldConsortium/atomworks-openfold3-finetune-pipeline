@@ -93,10 +93,10 @@ def write_run(tmp_path, final_atoms, log, translations=None):
         text += OPER_HEADER + "\n".join(opers) + "\n"
     (cif_dir / f"{PDB_ID}.cif").write_text(text)
     out_dir = tmp_path / "out"
-    (out_dir / "structure_files" / PDB_ID).mkdir(parents=True)
+    (out_dir / "of3_compressed_structures" / PDB_ID).mkdir(parents=True)
     (out_dir / "cleanup_steps").mkdir()
     (out_dir / "manifest.json").write_text(json.dumps({"structures": [PDB_ID]}))
-    write_atomarray_to_npz(array(final_atoms), out_dir / "structure_files" / PDB_ID / f"{PDB_ID}.npz")
+    write_atomarray_to_npz(array(final_atoms), out_dir / "of3_compressed_structures" / PDB_ID / f"{PDB_ID}.npz")
     if log is not None:
         (out_dir / "cleanup_steps" / f"{PDB_ID}.json").write_text(log.to_json())
     return ValidityInputs(out_dir, cif_dir, tmp_path / "ccd.cif")

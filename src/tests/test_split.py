@@ -166,7 +166,7 @@ def test_train_cache_is_a_clustered_cache_with_the_full_names_and_molecules(buil
 def test_token_count_is_ofs_on_the_entry_npz(built_copy, tmp_path):
     _, paths = split_with(built_copy, tmp_path)
     val = read_datacache(paths.val_cache)
-    npz = built_copy.output_dir / "structure_files" / "7riv" / "7riv.npz"
+    npz = built_copy.output_dir / "of3_compressed_structures" / "7riv" / "7riv.npz"
     expected = get_token_count(read_atomarray_from_npz(npz))
     assert val.structure_data["7riv"].token_count == expected
 
@@ -212,7 +212,7 @@ def test_multi_residue_ligand_gets_its_residue_count(tmp_path, monkeypatch):
     atoms.set_annotation("atom_name", np.array(["C1", "C2"] * 3))
     atoms.set_annotation("entity_id", np.full(6, 2))
     atoms.set_annotation("molecule_type_id", np.full(6, int(MoleculeType.LIGAND)))
-    out = tmp_path / "structure_files" / "xxxx"
+    out = tmp_path / "of3_compressed_structures" / "xxxx"
     out.mkdir(parents=True)
     write_atomarray_to_npz(atoms, out / "xxxx.npz")
     monkeypatch.setattr(split_module, "get_token_count", lambda atom_array: 6)
@@ -342,7 +342,7 @@ def excluded_ligand_cache(tmp_path, monkeypatch):
     atoms.set_annotation("atom_name", np.array(["CA", "C1", "C1"]))
     atoms.set_annotation("entity_id", np.array([1, 2, 3]))
     atoms.set_annotation("molecule_type_id", np.array([int(MoleculeType.PROTEIN)] + [int(MoleculeType.LIGAND)] * 2))
-    out = tmp_path / "structure_files" / "xxxx"
+    out = tmp_path / "of3_compressed_structures" / "xxxx"
     out.mkdir(parents=True)
     write_atomarray_to_npz(atoms, out / "xxxx.npz")
     monkeypatch.setattr(split_module, "get_token_count", lambda atom_array: 3)

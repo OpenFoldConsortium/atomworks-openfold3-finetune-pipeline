@@ -33,9 +33,9 @@ def _atoms(xs, bonds):
 def write_origin_run(tmp_path, final_xs, input_xs, bonds=((0, 1, SINGLE),)):
     """A one-residue run whose NPZ has final_xs and whose input CIF cifs/tiny.cif has input_xs."""
     out_dir = tmp_path / "out"
-    (out_dir / "structure_files" / PDB_ID).mkdir(parents=True)
+    (out_dir / "of3_compressed_structures" / PDB_ID).mkdir(parents=True)
     (out_dir / "manifest.json").write_text(json.dumps({"structures": [PDB_ID]}))
-    write_atomarray_to_npz(_atoms(final_xs, bonds), out_dir / "structure_files" / PDB_ID / f"{PDB_ID}.npz")
+    write_atomarray_to_npz(_atoms(final_xs, bonds), out_dir / "of3_compressed_structures" / PDB_ID / f"{PDB_ID}.npz")
     cif = pdbx.CIFFile()
     pdbx.set_structure(cif, _atoms(input_xs, bonds))
     (tmp_path / "cifs").mkdir()

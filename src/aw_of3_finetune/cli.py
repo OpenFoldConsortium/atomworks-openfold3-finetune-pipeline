@@ -22,7 +22,7 @@ from openfold3.core.data.io.dataset_cache import read_datacache, write_datacache
 from pydantic import ValidationError
 
 from aw_of3_finetune.cleanup import CleanupSettings, EmptyStructureError
-from aw_of3_finetune.constants import PREP_DROPPED_FILE
+from aw_of3_finetune.constants import CLEANED_STRUCTURES_DIRNAME, COMPRESSED_STRUCTURES_DIRNAME, PREP_DROPPED_FILE
 from aw_of3_finetune.ligand_inputs import CcdCodeCollisionError, read_ligand_table
 from aw_of3_finetune.ligand_names import SignaturesByName, format_name_conflicts, name_conflicts
 from aw_of3_finetune.msa import (
@@ -185,7 +185,7 @@ def _check_paired_dirs_writable(
     "--output-dir",
     required=True,
     type=click.Path(path_type=Path),
-    help="Output directory. Augmented CIFs go to <output-dir>/structures/, "
+    help="Output directory. Augmented CIFs go to <output-dir>/cleaned_structures/, "
     "manifest to <output-dir>/manifest.json.",
 )
 @click.option(
@@ -242,14 +242,14 @@ def finetune_prep(
 ) -> None:
     """Prepare an augmented-CIF fine-tuning dataset.
 
-    Writes <output-dir>/structures/<pdb_id>.cif (with embedded chain metadata) per input
+    Writes <output-dir>/cleaned_structures/<pdb_id>.cif (with embedded chain metadata) per input
     CIF, plus a slim manifest.json. Run materialize-dataset-cache next.
     """
     cif_paths = sorted(cif_dir.glob("*.cif"))
     if not cif_paths:
         raise click.UsageError(f"No .cif files found in {cif_dir}")
 
-    structures_dir = output_dir / "structures"
+    structures_dir = output_dir / CLEANED_STRUCTURES_DIRNAME
     structures_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "cleanup_settings.json").write_text(cleanup_settings.model_dump_json(indent=2))
     if not cleanup_settings.is_default():
@@ -435,7 +435,7 @@ def _warn_missing_msas(cif_path: Path, pdb_id: str, msa_dir: Path) -> None:
     required=True,
     type=click.Path(path_type=Path, exists=True, file_okay=False),
     help="Pipeline output directory produced by finetune-prep "
-    "(must contain manifest.json and structures/).",
+    "(must contain manifest.json and cleaned_structures/).",
 )
 @click.option(
     "--cache-output",
@@ -471,9 +471,9 @@ def materialize_dataset_cache(
     slim = json.loads(slim_path.read_text())
     cache_name = slim.get("name", "finetune")
 
-    cif_dir = output_dir / "structures"
+    cif_dir = output_dir / CLEANED_STRUCTURES_DIRNAME
     if not cif_dir.is_dir():
-        raise click.UsageError(f"No structures/ directory found in {output_dir}")
+        raise click.UsageError(f"No cleaned_structures/ directory found in {output_dir}")
 
     if cache_output is None:
         cache_output = output_dir / "dataset_cache.json"
@@ -497,7 +497,7 @@ def materialize_dataset_cache(
     required=True,
     type=click.Path(path_type=Path, exists=True, file_okay=False),
     help="Pipeline output directory (must contain dataset_cache.json, "
-    "structure_files/, reference_mols/ -- i.e. materialize-dataset-cache and "
+    "of3_compressed_structures/, reference_mols/ -- i.e. materialize-dataset-cache and "
     "save_structures_as_npz must already have run).",
 )
 @click.option(
@@ -620,7 +620,7 @@ def split_dataset(ctx: click.Context, output_dir: Path, split_csv: Path, msa_dir
     required=True,
     type=click.Path(path_type=Path, exists=True, file_okay=False),
     help="Pipeline output directory produced by finetune-prep "
-    "(must contain manifest.json and structures/).",
+    "(must contain manifest.json and cleaned_structures/).",
 )
 @click.option(
     "--msa-dir",
@@ -752,7 +752,7 @@ def _drop_entries(output_dir: Path, cache_path: Path, failing: set[str]) -> None
 
 @click.command()
 @click.option("--output-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
-              help="Pipeline output directory (dataset_cache.json, structure_files/, ...).")
+              help="Pipeline output directory (dataset_cache.json, of3_compressed_structures/, ...).")
 @click.option("--cif-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
               help="Directory of the original input mmCIF files.")
 @click.option("--msa-dir", default=None, type=click.Path(path_type=Path, exists=True, file_okay=False),
@@ -765,8 +765,6 @@ def _drop_entries(output_dir: Path, cache_path: Path, failing: set[str]) -> None
               help="Chemical Component Dictionary mmCIF. Reserved; currently unused by checks.")
 @click.option("--cache-path", default=None, type=click.Path(path_type=Path, dir_okay=False),
               help="Dataset cache JSON. Defaults to <output-dir>/dataset_cache.json.")
-@click.option("--structures-npz-dir", default=None, type=click.Path(path_type=Path, file_okay=False),
-              help="NPZ structure files root. Defaults to <output-dir>/structure_files.")
 @click.option("--expect-ligands/--no-expect-ligands", default=False, show_default=True,
               help="Warn (V4) about entries without any ligand.")
 @click.option("--allow-errors/--fail-on-errors", default=False,
@@ -786,7 +784,6 @@ def validate(
     template_structure_dir: Path | None,
     ccd_path: Path | None,
     cache_path: Path | None,
-    structures_npz_dir: Path | None,
     expect_ligands: bool,
     allow_errors: bool,
     skip_dataset_load: bool,
@@ -809,7 +806,6 @@ def validate(
         ccd_path=ccd_path,
         expect_ligands=expect_ligands,
         cache_path=cache_path,
-        npz_dir=structures_npz_dir,
     )
     checks = [c for c in CHECKS if not (skip_dataset_load and c == "V21")]
     report = run_validation(vctx, checks)
@@ -988,13 +984,6 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     "Defaults to <output-dir>/dataset_cache.json.",
 )
 @click.option(
-    "--structures-npz-dir",
-    default=None,
-    type=click.Path(path_type=Path),
-    help="Where to write NPZ structure files for the training dataloader. "
-    "Defaults to <output-dir>/structure_files.",
-)
-@click.option(
     "--skip-inconsistent",
     is_flag=True,
     default=False,
@@ -1042,7 +1031,6 @@ def finetune_pipeline(
     template_cutoff_date,
     templates: bool,
     cache_output: Path | None,
-    structures_npz_dir: Path | None,
     skip_inconsistent: bool,
     allow_errors: bool,
     skip_validation: bool,
@@ -1080,7 +1068,7 @@ def finetune_pipeline(
         )
     if not skip_report:  # refuse a report dir that is not an old report before doing any work
         try:
-            check_report_dir(ValidityInputs(output_dir, cif_dir, ccd_path, structures_npz_dir), output_dir / REPORT_SUBDIR)
+            check_report_dir(ValidityInputs(output_dir, cif_dir, ccd_path), output_dir / REPORT_SUBDIR)
         except ReportError as error:
             raise click.ClickException(str(error)) from error
     click.echo("=== Stage 1/10: finetune-prep ===")
@@ -1140,9 +1128,9 @@ def finetune_pipeline(
         )
 
     click.echo("\n=== Stage 6/10: NPZ structure files ===")
-    npz_dir = structures_npz_dir if structures_npz_dir is not None else output_dir / "structure_files"
-    save_structures_as_npz(output_dir / "structures", npz_dir)
-    n = len(list((output_dir / "structures").glob("*.cif")))
+    npz_dir = output_dir / COMPRESSED_STRUCTURES_DIRNAME
+    save_structures_as_npz(output_dir / CLEANED_STRUCTURES_DIRNAME, npz_dir)
+    n = len(list((output_dir / CLEANED_STRUCTURES_DIRNAME).glob("*.cif")))
     click.echo(f"NPZ structure files: {npz_dir} ({n} structure(s))")
 
     if split_csv is not None:
@@ -1184,7 +1172,6 @@ def finetune_pipeline(
                 template_structure_dir=None,
                 ccd_path=ccd_path,
                 cache_path=cache_output if cache_output is not None else output_dir / "dataset_cache.json",
-                structures_npz_dir=npz_dir,
                 expect_ligands=False,
                 allow_errors=allow_errors,
                 skip_dataset_load=skip_dataset_load,
@@ -1196,34 +1183,31 @@ def finetune_pipeline(
         click.echo("\n=== Stage 10/10: report -- skipped (--skip-report) ===")
     else:
         click.echo("\n=== Stage 10/10: report ===")
-        inputs = ValidityInputs(output_dir, cif_dir, ccd_path, npz_dir, cache_output)
+        inputs = ValidityInputs(output_dir, cif_dir, ccd_path, cache_output)
         try:
             _write_report(inputs, output_dir / REPORT_SUBDIR)
         except Exception as error:  # noqa: BLE001 — the report never changes the pipeline's outcome
-            _warn_report_failed(inputs, structures_npz_dir, error)
+            _warn_report_failed(inputs, error)
     if validate_exit is not None:
         raise validate_exit
 
     click.echo("\nDone.")
 
 
-def _warn_report_failed(inputs: ValidityInputs, structures_npz_dir: Path | None, error: Exception) -> None:
+def _warn_report_failed(inputs: ValidityInputs, error: Exception) -> None:
     """Log the report stage's traceback and say how to rebuild the report.
 
     Args:
         inputs: The pipeline output the report was about.
-        structures_npz_dir: The pipeline's --structures-npz-dir, if given.
         error: What the report stage raised.
     """
     logger.warning("report stage failed", exc_info=error)
     message = error.message if isinstance(error, click.ClickException) else f"{type(error).__name__}: {error}"
-    npz_option = f" --structures-npz-dir {structures_npz_dir}" if structures_npz_dir is not None else ""
-    if inputs.cache_path is not None:
-        npz_option += f" --cache-path {inputs.cache_path}"
+    cache_option = f" --cache-path {inputs.cache_path}" if inputs.cache_path is not None else ""
     click.echo(
         f"warning: the report was not written ({message}). The dataset itself is unaffected; "
         f"rebuild the report with: finetune-report --output-dir {inputs.out_dir} --cif-dir {inputs.cif_dir} "
-        f"--ccd-path {inputs.ccd_path}{npz_option}"
+        f"--ccd-path {inputs.ccd_path}{cache_option}"
     )
 
 
@@ -1254,8 +1238,6 @@ def _write_report(inputs: ValidityInputs, report_dir: Path, ids: list[str] | Non
               help="Directory of the original input mmCIF files.")
 @click.option("--ccd-path", required=True, type=click.Path(path_type=Path, exists=True, dir_okay=False),
               help="Chemical Component Dictionary mmCIF.")
-@click.option("--structures-npz-dir", default=None, type=click.Path(path_type=Path, exists=True, file_okay=False),
-              help="NPZ structure files root. Defaults to <output-dir>/structure_files.")
 @click.option("--ids", "ids_file", default=None, type=click.Path(path_type=Path, exists=True, dir_okay=False),
               help="File with one structure id per line: report only these.")
 @click.option("--report-dir", default=None, type=click.Path(path_type=Path, file_okay=False),
@@ -1267,7 +1249,6 @@ def finetune_report(
     output_dir: Path,
     cif_dir: Path,
     ccd_path: Path,
-    structures_npz_dir: Path | None,
     ids_file: Path | None,
     report_dir: Path | None,
     cache_path: Path | None,
@@ -1276,7 +1257,7 @@ def finetune_report(
     ids = None
     if ids_file is not None:
         ids = [line.strip() for line in ids_file.read_text().splitlines() if line.strip()]
-    inputs = ValidityInputs(output_dir, cif_dir, ccd_path, structures_npz_dir, cache_path)
+    inputs = ValidityInputs(output_dir, cif_dir, ccd_path, cache_path)
     _write_report(inputs, report_dir if report_dir is not None else output_dir / REPORT_SUBDIR, ids)
 
 
@@ -1287,7 +1268,7 @@ def finetune_report(
     required=True,
     type=click.Path(path_type=Path, exists=True, file_okay=False),
     help="Pipeline output directory produced by finetune-prep (manifest.json + "
-    "structures/); only this dataset's sequences are processed.",
+    "cleaned_structures/); only this dataset's sequences are processed.",
 )
 @click.option(
     "--msa-dir",
@@ -1344,7 +1325,7 @@ def fetch_templates(
     "--output-dir",
     required=True,
     type=click.Path(path_type=Path, exists=True, file_okay=False),
-    help="Pipeline output directory (manifest.json, structures/, and dataset_cache.json "
+    help="Pipeline output directory (manifest.json, cleaned_structures/, and dataset_cache.json "
     "from materialize-dataset-cache).",
 )
 @click.option(

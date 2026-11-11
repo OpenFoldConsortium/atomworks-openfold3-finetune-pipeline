@@ -81,7 +81,7 @@ def write_run(tmp_path, atoms, conns, kept, bonds=(), molecule_types=None, remov
     (cif_dir / f"{PDB_ID}.cif").write_text(text)
 
     out_dir = tmp_path / "out"
-    (out_dir / "structure_files" / PDB_ID).mkdir(parents=True)
+    (out_dir / "of3_compressed_structures" / PDB_ID).mkdir(parents=True)
     (out_dir / "cleanup_steps").mkdir()
     (out_dir / "manifest.json").write_text(json.dumps({"structures": [PDB_ID]}))
     final = [Atom([atoms[i][5], 0.0, 0.0], chain_id=atoms[i][0], res_id=int(atoms[i][2]) if atoms[i][2] != "." else 1,
@@ -90,7 +90,7 @@ def write_run(tmp_path, atoms, conns, kept, bonds=(), molecule_types=None, remov
     final_array = array(final)
     position = {index: p for p, index in enumerate(kept)}
     final_array.bonds = BondList(len(final), np.array([[position[a], position[b], 1] for a, b in bonds], dtype=int).reshape(-1, 3))
-    write_atomarray_to_npz(final_array, out_dir / "structure_files" / PDB_ID / f"{PDB_ID}.npz")
+    write_atomarray_to_npz(final_array, out_dir / "of3_compressed_structures" / PDB_ID / f"{PDB_ID}.npz")
     chains = {c: {"molecule_type": t} for c, t in (molecule_types or {"A": "PROTEIN", "B": "LIGAND"}).items()}
     (out_dir / "dataset_cache.json").write_text(json.dumps({"structure_data": {PDB_ID: {"chains": chains}}}))
     removed = removed or {}
@@ -137,7 +137,7 @@ def test_7axf_covalent_drug_link_is_present(built_7axf, ccd_path):
 def test_dropped_bond_is_missing(built_7axf, tmp_path, ccd_path):
     copied = tmp_path / "copy"
     shutil.copytree(built_7axf.output_dir, copied)
-    npz = copied / "structure_files" / "7axf" / "7axf.npz"
+    npz = copied / "of3_compressed_structures" / "7axf" / "7axf.npz"
     atoms = read_atomarray_from_npz(npz)
     sg = np.flatnonzero((atoms.label_asym_id == "A") & (atoms.res_id == 89) & (atoms.atom_name == "SG"))[0]
     c6 = np.flatnonzero((atoms.label_asym_id == "C") & (atoms.atom_name == "C6"))[0]
@@ -324,7 +324,7 @@ def test_operator_copy_link_is_checked_per_copy(tmp_path):
     inputs = write_run(tmp_path, DISULFIDE_ATOMS[:2], [DISULFIDE], kept=[0, 1], bonds=[(0, 1)])
     cif = inputs.input_cif(PDB_ID)
     cif.write_text(cif.read_text() + OPER_HEADER)
-    npz = inputs.out_dir / "structure_files" / PDB_ID / f"{PDB_ID}.npz"
+    npz = inputs.out_dir / "of3_compressed_structures" / PDB_ID / f"{PDB_ID}.npz"
     first = read_atomarray_from_npz(npz)
     first.label_asym_id = np.array(["A_1"] * len(first))
     first.chain_id = np.array(["1"] * len(first))

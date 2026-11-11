@@ -104,7 +104,7 @@ def _prepped_output_dir(cif_path: Path, pdb_id: str, tmp_path: Path) -> Path:
         tmp_path: Scratch directory for the input and output dirs.
 
     Returns:
-        The output directory (manifest.json + structures/).
+        The output directory (manifest.json + cleaned_structures/).
     """
     cif_dir = tmp_path / "input"
     cif_dir.mkdir()

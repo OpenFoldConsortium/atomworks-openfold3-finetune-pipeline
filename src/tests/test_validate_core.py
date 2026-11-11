@@ -103,7 +103,7 @@ def test_context_loads_built_dataset(built_dataset):
 def test_missing_npz_is_a_finding(built_dataset, tmp_path, monkeypatch):
     """A deleted NPZ raises FileNotFoundError, and a check that reads it flags only that entry."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
-    shutil.rmtree(built.output_dir / "structure_files" / "3u8v")
+    shutil.rmtree(built.output_dir / "of3_compressed_structures" / "3u8v")
     ctx = context(built)
 
     with pytest.raises(FileNotFoundError):

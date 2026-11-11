@@ -8,24 +8,28 @@ from biotite.structure import AtomArray
 from biotite.structure.io.pdbx import CIFFile
 from openfold3.core.data.io.structure.atom_array import read_atomarray_from_npz
 
-from aw_of3_finetune.constants import PREP_DROPPED_FILE
+from aw_of3_finetune.constants import COMPRESSED_STRUCTURES_DIRNAME, PREP_DROPPED_FILE
 from aw_of3_finetune.steplog import StepLog
 
 
 @dataclass(frozen=True)
 class ValidityInputs:
-    """Paths of a pipeline run: its output dir, its input CIF dir, the CCD file, the NPZ dir and the cache.
+    """Paths of a pipeline run: its output dir, its input CIF dir, the CCD file and the cache.
 
-    npz_dir defaults to out_dir/structure_files (--structures-npz-dir); cache_path to out_dir/dataset_cache.json
-    (--cache-output).
+    cache_path defaults to out_dir/dataset_cache.json (--cache-output). The NPZ files are always read from
+    out_dir/of3_compressed_structures.
     """
 
     out_dir: Path
     cif_dir: Path
     ccd_path: Path
-    npz_dir: Path | None = None
     cache_path: Path | None = None
     _cache: dict = field(default_factory=dict, init=False, repr=False, compare=False)
+
+    @property
+    def npz_dir(self) -> Path:
+        """Where the pipeline wrote the NPZ files: out_dir/of3_compressed_structures."""
+        return self.out_dir / COMPRESSED_STRUCTURES_DIRNAME
 
     def manifest_ids(self) -> list[str]:
         """Every structure id of the dataset, in manifest order.
@@ -52,8 +56,7 @@ class ValidityInputs:
         Returns:
             The atoms from <npz_dir>/<id>/<id>.npz.
         """
-        npz_dir = self.npz_dir or self.out_dir / "structure_files"
-        return read_atomarray_from_npz(npz_dir / pdb_id / f"{pdb_id}.npz")
+        return read_atomarray_from_npz(self.npz_dir / pdb_id / f"{pdb_id}.npz")
 
     def step_log(self, pdb_id: str) -> StepLog | None:
         """The cleanup step log of an entry.

@@ -71,7 +71,7 @@ def test_every_val_entry_loads_with_metric_masks(built_copy, tmp_path):
 @pytest.mark.integration
 def test_broken_val_entry_raises(built_copy, tmp_path):
     dataset = split_and_build_val_dataset(built_copy, tmp_path)
-    npz = built_copy.output_dir / "structure_files" / "7riv" / "7riv.npz"
+    npz = built_copy.output_dir / "of3_compressed_structures" / "7riv" / "7riv.npz"
     npz.unlink()
     index = int(dataset.datapoint_cache.index[dataset.datapoint_cache["pdb_id"] == "7riv"][0])
     with pytest.raises(FileNotFoundError):

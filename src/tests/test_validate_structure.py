@@ -14,7 +14,7 @@ STRUCTURE_CHECKS = ["V1", "V2", "V3", "V5", "V6", "V7"]
 
 def _rewrite_npz(built, entry, edit):
     """Load an entry's NPZ arrays, apply `edit(arrays)` in place, and save them back."""
-    path = built.output_dir / "structure_files" / entry / f"{entry}.npz"
+    path = built.output_dir / "of3_compressed_structures" / entry / f"{entry}.npz"
     with np.load(path, allow_pickle=True) as data:
         arrays = {name: data[name] for name in data.files}
     edit(arrays)
@@ -48,7 +48,7 @@ def test_structure_checks_pass_on_clean_build(built_dataset):
 def test_v2_detects_sequence_change(built_dataset, tmp_path):
     """V2 flags an entry whose cleaned CIF has a different sequence than the source."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
-    path = built.output_dir / "structures" / "3u8v.cif"
+    path = built.output_dir / "cleaned_structures" / "3u8v.cif"
     text = path.read_text()
     assert text.count("SGHTAHV") == 1
 

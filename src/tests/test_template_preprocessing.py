@@ -211,7 +211,7 @@ def test_weighted_pdb_dataset_loads_templates(ccd_path, tmp_path):
     """The generated train config gives WeightedPDBDataset non-empty template features."""
     output_dir, msa_dir = _prepare_1fdl(tmp_path, ccd_path)
     _run_template_stages(output_dir, msa_dir)
-    save_structures_as_npz(output_dir / "structures", output_dir / "structure_files")
+    save_structures_as_npz(output_dir / "cleaned_structures", output_dir / "of3_compressed_structures")
     _run(generate_train_config, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)])
 
     paths = yaml.safe_load((output_dir / "train.yml").read_text())["dataset_paths"]

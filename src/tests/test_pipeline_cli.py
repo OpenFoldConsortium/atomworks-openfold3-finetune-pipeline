@@ -272,7 +272,7 @@ class TestBuildManifest:
         self, cif_protein_monomer, cif_protein_only, tmp_path
     ):
         """Two CIFs → two structure_data entries in the manifest."""
-        cif_dir = tmp_path / "structures"
+        cif_dir = tmp_path / "cleaned_structures"
         cif_dir.mkdir()
         _write_minimal_cif(cif_protein_monomer, "3u8v", cif_dir)
         _write_minimal_cif(cif_protein_only, "2crb", cif_dir)
@@ -284,7 +284,7 @@ class TestBuildManifest:
 
     def test_manifest_json_loadable(self, cif_protein_monomer, tmp_path):
         """Manifest JSON round-trips through ClusteredDatasetCache.from_json()."""
-        cif_dir = tmp_path / "structures"
+        cif_dir = tmp_path / "cleaned_structures"
         cif_dir.mkdir()
         _write_minimal_cif(cif_protein_monomer, "3u8v", cif_dir)
 
@@ -298,7 +298,7 @@ class TestBuildManifest:
 
     def test_manifest_cluster_ids_preserved(self, cif_protein_monomer, tmp_path):
         """Cluster IDs written into the CIF survive the manifest round-trip."""
-        cif_dir = tmp_path / "structures"
+        cif_dir = tmp_path / "cleaned_structures"
         cif_dir.mkdir()
         _write_minimal_cif(cif_protein_monomer, "3u8v", cif_dir)
 
@@ -326,7 +326,7 @@ def _make_output_dir_from_cif(cif_path: Path, pdb_id: str, tmp_path: Path) -> Pa
         tmp_path: Scratch directory; inputs go in ``input/``, outputs in ``out/``.
 
     Returns:
-        The output directory (manifest.json + structures/).
+        The output directory (manifest.json + cleaned_structures/).
     """
     cif_dir = tmp_path / "input"
     cif_dir.mkdir()
@@ -491,15 +491,15 @@ class TestFinetunePrep:
         assert "EPE" in residue_names(cif_dna_complex)
 
         # The written CIFs don't.
-        actual_7riv = residue_names(output_dir / "structures" / "7riv.cif")
-        actual_2q2k = residue_names(output_dir / "structures" / "2q2k.cif")
+        actual_7riv = residue_names(output_dir / "cleaned_structures" / "7riv.cif")
+        actual_2q2k = residue_names(output_dir / "cleaned_structures" / "2q2k.cif")
         assert actual_7riv & {"HOH", "DOD"} == set()
         assert actual_2q2k & {"HOH", "DOD", "EPE"} == set()
 
     def test_creates_cif_per_cif(
         self, cif_protein_monomer, cif_protein_only, tmp_path
     ):
-        """One CIF is written per input CIF into <output>/structures/."""
+        """One CIF is written per input CIF into <output>/cleaned_structures/."""
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer)
@@ -512,8 +512,8 @@ class TestFinetunePrep:
         assert result.exit_code == 0, result.output
 
         # One augmented CIF per input structure.
-        assert (tmp_path / "out" / "structures" / "3u8v.cif").exists()
-        assert (tmp_path / "out" / "structures" / "2crb.cif").exists()
+        assert (tmp_path / "out" / "cleaned_structures" / "3u8v.cif").exists()
+        assert (tmp_path / "out" / "cleaned_structures" / "2crb.cif").exists()
 
     def test_creates_manifest_json(self, cif_protein_monomer, tmp_path):
         """finetune-prep always writes manifest.json in the output dir."""
@@ -623,7 +623,7 @@ class TestFinetunePrep:
         ], catch_exceptions=False)
 
         assert result.exit_code == 0, result.output
-        aug_cif = tmp_path / "out" / "structures" / "2q2k.cif"
+        aug_cif = tmp_path / "out" / "cleaned_structures" / "2q2k.cif"
         assert aug_cif.exists()
 
         block = CIFFile.read(aug_cif).block
@@ -684,10 +684,10 @@ class TestFinetunePrep:
 
         # The flagged structure is reported as skipped and gets no augmented CIF.
         assert "skipping 2crb" in result.output
-        assert not (output_dir / "structures" / "2crb.cif").exists()
+        assert not (output_dir / "cleaned_structures" / "2crb.cif").exists()
 
         # The other structure is written and is the only one in the manifest.
-        assert (output_dir / "structures" / "3u8v.cif").exists()
+        assert (output_dir / "cleaned_structures" / "3u8v.cif").exists()
         manifest = json.loads((output_dir / "manifest.json").read_text())
         assert manifest["structures"] == ["3u8v"]
 
@@ -703,7 +703,7 @@ class TestFinetunePrep:
             "--ccd-path", str(ccd_path),
         ], catch_exceptions=False)
 
-        aug = output_dir / "structures" / "3u8v.cif"
+        aug = output_dir / "cleaned_structures" / "3u8v.cif"
         structure_data = read_augmented_cif(aug, "3u8v", "t").structure_data["3u8v"]
         # The untouched metadata passes the check (must not raise).
         check_chain_consistency(aug, structure_data)
@@ -730,7 +730,7 @@ class TestFinetunePrep:
         ], catch_exceptions=False)
 
         assert result.exit_code == 0, result.output
-        aug = output_dir / "structures" / "2q2k.cif"
+        aug = output_dir / "cleaned_structures" / "2q2k.cif"
         structure_data = read_augmented_cif(aug, "2q2k", "t").structure_data["2q2k"]
 
         # Two copies of the DNA duplex (1, 4) and four protein chains (2, 3, 5, 6);
@@ -778,7 +778,7 @@ class TestFinetunePrep:
         ], catch_exceptions=False)
         assert result.exit_code == 0, result.output
 
-        aug = output_dir / "structures" / "3u8v.cif"
+        aug = output_dir / "cleaned_structures" / "3u8v.cif"
 
         # chem_comp was carried over from the source CIF.
         assert "chem_comp" in CIFFile.read(aug).block
@@ -900,12 +900,12 @@ class TestFinetunePipeline:
         assert "generate-train-config -- skipped" in result.output
 
         # Every other stage wrote its artifact.
-        assert (output_dir / "structures" / "3u8v.cif").exists()
-        assert (output_dir / "structures" / "2crb.cif").exists()
+        assert (output_dir / "cleaned_structures" / "3u8v.cif").exists()
+        assert (output_dir / "cleaned_structures" / "2crb.cif").exists()
         assert (output_dir / "manifest.json").exists()
         assert (output_dir / "dataset_cache.json").exists()
-        assert (output_dir / "structure_files" / "3u8v" / "3u8v.npz").exists()
-        assert (output_dir / "structure_files" / "2crb" / "2crb.npz").exists()
+        assert (output_dir / "of3_compressed_structures" / "3u8v" / "3u8v.npz").exists()
+        assert (output_dir / "of3_compressed_structures" / "2crb" / "2crb.npz").exists()
 
         # No train.yml, since there is no MSA directory.
         assert not (output_dir / "train.yml").exists()
@@ -1418,7 +1418,7 @@ class TestFinetunePrepSkipsEmptied:
         # Only the surviving structure is in the manifest and has an augmented CIF.
         manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
         assert manifest["structures"] == ["3u8v"]
-        assert not (tmp_path / "out" / "structures" / "minimal_3aa.cif").exists()
+        assert not (tmp_path / "out" / "cleaned_structures" / "minimal_3aa.cif").exists()
 
         # The skip is reported per structure and in the final summary.
         assert "WARNING: skipping minimal_3aa -- empty after cleanup (remove_small_polymers)" in result.output
@@ -1430,7 +1430,7 @@ class TestFinetunePrepSkipsEmptied:
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         write_emptiable_minimal_3aa(cif_dir)
-        stale = tmp_path / "out" / "structures" / "minimal_3aa.cif"
+        stale = tmp_path / "out" / "cleaned_structures" / "minimal_3aa.cif"
         stale.parent.mkdir(parents=True)
         stale.write_text("stale from an earlier run")
 
