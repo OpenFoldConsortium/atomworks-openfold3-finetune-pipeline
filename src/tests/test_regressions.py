@@ -16,7 +16,7 @@ from validate_helpers import context
 def _residue_names(built):
     """Map entry to the set of residue names in its augmented CIF."""
     names = {}
-    for cif in (built.output_dir / "structures").glob("*.cif"):
+    for cif in (built.output_dir / "cleaned_structures").glob("*.cif"):
         block = CIFFile.read(cif).block
         names[cif.stem] = set(block["atom_site"]["label_comp_id"].as_array().tolist())
     return names
@@ -179,8 +179,8 @@ def test_missing_entity_poly_type_is_filled_from_atomworks(cif_dna_complex, tmp_
 
 def test_missing_entity_poly_type_still_queries_only_protein(cif_dna_complex, tmp_path):
     source = _without_entity_poly_type(cif_dna_complex, tmp_path / "2q2k_source.cif")
-    (tmp_path / "structures").mkdir()
-    prepare_augmented_cif(source, "2q2k", tmp_path / "structures" / "2q2k.cif")
+    (tmp_path / "cleaned_structures").mkdir()
+    prepare_augmented_cif(source, "2q2k", tmp_path / "cleaned_structures" / "2q2k.cif")
     (tmp_path / "manifest.json").write_text('{"name": "t", "structures": ["2q2k"]}')
 
     actual_queries = collect_msa_queries(tmp_path)

@@ -72,8 +72,8 @@ Everything is in `output/tutorial/`.
 
 | Output | What it is |
 |---|---|
-| `structures/` | The cleaned structures as mmCIF. Waters and crystallization aids are gone |
-| `structure_files/` | The same structures as NPZ, which OpenFold3 loads in training |
+| `cleaned_structures/` | The cleaned structures as mmCIF. Waters and crystallization aids are gone |
+| `of3_compressed_structures/` | The same structures as NPZ, which OpenFold3 loads in training |
 | `reference_mols/` | One SDF per ligand and residue type, such as `3WF.sdf` |
 | `dataset_cache.json` | The index of every structure and chain |
 | `train.yml` | A ready-to-run OpenFold3 training config |

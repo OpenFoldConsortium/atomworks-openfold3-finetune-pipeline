@@ -76,7 +76,7 @@ Run the V checks on a dataset.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--output-dir` | Required | Pipeline output directory (dataset_cache.json, structure_files/, ...). |
+| `--output-dir` | Required | Pipeline output directory (dataset_cache.json, of3_compressed_structures/, ...). |
 | `--cif-dir` | Required | Directory of the original input mmCIF files. |
 | `--msa-dir` | None | MSA directory (holds of3_alignments/ and template_structures/). |
 | `--template-cache-dir` | None | OpenFold3 template cache directory. Defaults to `<msa-dir>/of3_template_data/template_cache`. |
@@ -110,7 +110,7 @@ Fetch MSAs from ColabFold.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--output-dir` | Required | Pipeline output directory produced by finetune-prep (must contain manifest.json and structures/). |
+| `--output-dir` | Required | Pipeline output directory produced by finetune-prep (must contain manifest.json and cleaned_structures/). |
 | `--msa-dir` | Required | Directory to write MSA files. |
 | `--server` | `https://api.colabfold.com` | ColabFold MSA server URL. |
 | `--user-agent` | `aw-of3-finetune` | User-agent string sent with API requests. |
@@ -123,7 +123,7 @@ Download template structures.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--output-dir` | Required | Pipeline output directory produced by finetune-prep (manifest.json + structures/). |
+| `--output-dir` | Required | Pipeline output directory produced by finetune-prep (manifest.json + cleaned_structures/). |
 | `--msa-dir` | Required | MSA directory written by generate-msas (with templates on). |
 | `--max-hits` | `50` | Unique PDB entries to resolve per sequence, best e-value first. |
 | `--pdb-mirror-path` | None | Local PDB mirror (<mirror>/<id[1:3]>/<id>.cif.gz) to read entries from before downloading. |
@@ -134,7 +134,7 @@ Build `dataset_cache.json`.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--output-dir` | Required | Pipeline output directory produced by finetune-prep (must contain manifest.json and structures/). |
+| `--output-dir` | Required | Pipeline output directory produced by finetune-prep (must contain manifest.json and cleaned_structures/). |
 | `--cache-output` | None | Path to write the full dataset cache JSON. |
 | `--msa-dir` | None | MSA directory previously written by generate-msas. |
 
@@ -144,7 +144,7 @@ Filter templates and add them to the dataset cache.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--output-dir` | Required | Pipeline output directory (manifest.json, structures/, and dataset_cache.json from materialize-dataset-cache). |
+| `--output-dir` | Required | Pipeline output directory (manifest.json, cleaned_structures/, and dataset_cache.json from materialize-dataset-cache). |
 | `--msa-dir` | Required | MSA directory after fetch-templates (template_structures/ and of3_template_alignments/). |
 | `--cache-file` | None | Dataset cache to add template_ids to, in place. |
 | `--min-release-date-diff` | `60` | Days a template must predate each structure's release date. |
@@ -164,7 +164,7 @@ Write `train.yml`.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--output-dir` | Required | Pipeline output directory (must contain dataset_cache.json, structure_files/, reference_mols/ -- i.e. |
+| `--output-dir` | Required | Pipeline output directory (must contain dataset_cache.json, of3_compressed_structures/, reference_mols/ -- i.e. |
 | `--msa-dir` | Required | MSA directory previously written by generate-msas / reorganized by materialize-dataset-cache. |
 | `--config-output` | None | Path to write the runner-yaml. |
 | `--wandb-project` | None | Log the training run to this Weights & Biases project (OF3's only config-driven logger). |

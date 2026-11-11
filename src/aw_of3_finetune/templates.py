@@ -155,7 +155,7 @@ def reorganize_template_alignments_for_of3(
     (run fetch_templates first). dest_root must not be of3_alignments/.
 
     Args:
-        output_dir: finetune-prep output directory (manifest.json + structures/).
+        output_dir: finetune-prep output directory (manifest.json + cleaned_structures/).
         msa_dir: generate-msas output directory, containing ``templates/<shard>/``.
         dest_root: Root of the per-rep_id layout to write.
 
@@ -463,7 +463,7 @@ def fetch_templates(
     sequences and never re-downloaded.
 
     Args:
-        output_dir: finetune-prep output directory (manifest.json + structures/).
+        output_dir: finetune-prep output directory (manifest.json + cleaned_structures/).
         msa_dir: generate-msas output directory, containing ``templates/<shard>/``.
         max_hits: Unique PDB entries to resolve per sequence, best e-value first.
             Applied before the sequence and release-date filters, so keep it >= the
@@ -528,7 +528,7 @@ def preprocess_templates_for_of3(
     cache, structure arrays and per-chain reports under ``{msa_dir}/of3_template_data/``.
 
     Args:
-        output_dir: finetune-prep output directory (manifest.json + structures/).
+        output_dir: finetune-prep output directory (manifest.json + cleaned_structures/).
         msa_dir: generate-msas output directory, after fetch-templates.
         cache_file: dataset_cache.json from materialize-dataset-cache; updated in place.
         min_release_date_diff: Days a template must predate each structure's release

@@ -200,7 +200,7 @@ class TestCli:
         assert "Cleanup settings differ from the defaults: remove_waters=False" in result.output
 
         # The cleaned CIF still contains water (HOH).
-        actual_cleaned_cif = (tmp_path / "out" / "structures" / "7riv.cif").read_text()
+        actual_cleaned_cif = (tmp_path / "out" / "cleaned_structures" / "7riv.cif").read_text()
         assert "HOH" in actual_cleaned_cif
 
     def test_bad_config_is_a_usage_error(self, cif_protein_monomer, tmp_path):
@@ -243,7 +243,7 @@ class TestCli:
         assert "7riv: cleanup done" in result.output
 
         # The cleaned-structures directory is printed on the line right after the manifest.
-        expected_structures_line = f"Cleaned structures: {tmp_path / 'out' / 'structures'} (1 augmented CIF(s))"
+        expected_structures_line = f"Cleaned structures: {tmp_path / 'out' / 'cleaned_structures'} (1 augmented CIF(s))"
         lines = result.output.splitlines()
         manifest_index = next(i for i, line in enumerate(lines) if line.startswith("Manifest:"))
         assert lines[manifest_index + 1] == expected_structures_line

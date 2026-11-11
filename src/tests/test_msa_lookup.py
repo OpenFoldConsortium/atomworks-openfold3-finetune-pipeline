@@ -289,7 +289,7 @@ class TestCrossStructureMsaLookup:
 
 
 def _make_output_dir(tmp_path: Path, pdb_ids: list[str], cif_sources: list[Path]) -> Path:
-    """Build a minimal finetune-prep output_dir (manifest.json + structures/ symlinks).
+    """Build a minimal finetune-prep output_dir (manifest.json + cleaned_structures/ symlinks).
 
     Args:
         tmp_path: Directory to populate.
@@ -302,7 +302,7 @@ def _make_output_dir(tmp_path: Path, pdb_ids: list[str], cif_sources: list[Path]
     (tmp_path / "manifest.json").write_text(
         json.dumps({"name": "test", "structures": pdb_ids})
     )
-    structures = tmp_path / "structures"
+    structures = tmp_path / "cleaned_structures"
     structures.mkdir()
     for pdb_id, src in zip(pdb_ids, cif_sources):
         (structures / f"{pdb_id}.cif").symlink_to(src.resolve())
@@ -334,7 +334,7 @@ class TestCollectMsaQueries:
     def test_nucleic_acid_chains_not_queried_from_augmented_cif(self, cif_dna_complex, tmp_path):
         """Same, from the augmented CIF finetune-prep writes (its entity_poly must
         distinguish protein from DNA)."""
-        structures = tmp_path / "structures"
+        structures = tmp_path / "cleaned_structures"
         structures.mkdir()
         prepare_augmented_cif(cif_dna_complex, "2q2k", structures / "2q2k.cif")
         (tmp_path / "manifest.json").write_text(json.dumps({"name": "t", "structures": ["2q2k"]}))
@@ -364,7 +364,7 @@ class TestCollectMsaQueries:
         (tmp_path / "manifest.json").write_text(
             json.dumps({"name": "test", "structures": ["ghost"]})
         )
-        (tmp_path / "structures").mkdir()
+        (tmp_path / "cleaned_structures").mkdir()
         # No CIF written for "ghost"
 
         queries = collect_msa_queries(tmp_path)
@@ -377,7 +377,7 @@ class TestCollectMsaQueries:
         (tmp_path / "manifest.json").write_text(
             json.dumps({"name": "test", "structures": []})
         )
-        (tmp_path / "structures").mkdir()
+        (tmp_path / "cleaned_structures").mkdir()
 
         # No structures means no queries.
         assert collect_msa_queries(tmp_path) == {}

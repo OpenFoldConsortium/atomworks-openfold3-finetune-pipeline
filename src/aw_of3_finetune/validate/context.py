@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 from openfold3.core.data.io.dataset_cache import read_datacache
 
+from aw_of3_finetune.constants import CLEANED_STRUCTURES_DIRNAME, COMPRESSED_STRUCTURES_DIRNAME
+
 
 @dataclass
 class ValidationContext:
@@ -30,7 +32,7 @@ class ValidationContext:
         if self.cache_path is None:
             self.cache_path = self.output_dir / "dataset_cache.json"
         if self.npz_dir is None:
-            self.npz_dir = self.output_dir / "structure_files"
+            self.npz_dir = self.output_dir / COMPRESSED_STRUCTURES_DIRNAME
 
     @property
     def dataset_cache(self):
@@ -61,8 +63,8 @@ class ValidationContext:
         return self._npz[entry]
 
     def augmented_cif(self, entry: str) -> Path:
-        """Path to ``structures/<id>.cif``."""
-        return self.output_dir / "structures" / f"{entry}.cif"
+        """Path to ``cleaned_structures/<id>.cif``."""
+        return self.output_dir / CLEANED_STRUCTURES_DIRNAME / f"{entry}.cif"
 
     def source_cif(self, entry: str) -> Path:
         """Path to the input CIF in ``cif_dir`` whose stem matches case-insensitively.

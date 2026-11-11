@@ -21,3 +21,9 @@ PREPARE_RECORD_FILE = "prepare_inputs.json"
 TEMPLATE_CUTOFF_FILENAME = "template_cutoff_date.json"
 # V16 starts its finding with this when a cutoff was used; the user report shows it as a note.
 TEMPLATE_CUTOFF_NOTE = "templates use a fixed cutoff of"
+
+# finetune-prep writes the cleaned structures (augmented mmCIFs) into this subdirectory of the output directory.
+CLEANED_STRUCTURES_DIRNAME = "cleaned_structures"
+
+# finetune-pipeline writes the cleaned structures as OF3 NPZ files (<id>/<id>.npz) here unless --structures-npz-dir is given.
+COMPRESSED_STRUCTURES_DIRNAME = "of3_compressed_structures"

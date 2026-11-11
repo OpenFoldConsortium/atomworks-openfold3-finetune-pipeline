@@ -60,7 +60,7 @@ def test_weighted_pdb_dataset_e2e(cif_for_integration, ccd_path, tmp_path):
     assert result.exit_code == 0, result.output
 
     # Prep wrote the augmented CIF, the slim manifest and the reference-molecule directory.
-    augmented_cif_dir = output_dir / "structures"
+    augmented_cif_dir = output_dir / "cleaned_structures"
     slim_manifest_path = output_dir / "manifest.json"
     ref_mol_dir = output_dir / "reference_mols"
     assert (augmented_cif_dir / f"{pdb_id}.cif").exists()
@@ -129,7 +129,7 @@ def test_weighted_pdb_dataset_e2e(cif_for_integration, ccd_path, tmp_path):
 
     # Step 4: convert augmented CIFs → NPZ.
     # The augmented CIFs are the single source of truth; NPZ files are derived artifacts.
-    structures_dir = tmp_path / "structure_files"
+    structures_dir = tmp_path / "of3_compressed_structures"
     save_structures_as_npz(augmented_cif_dir, structures_dir)
     assert (structures_dir / pdb_id / f"{pdb_id}.npz").exists()
 
@@ -216,11 +216,11 @@ def test_finetune_pipeline_orchestrator_e2e(
     assert result.exit_code == 0, result.output
 
     # Every stage's output exists: cleaned CIFs, dataset cache, NPZ files, OF3 alignments.
-    assert (output_dir / "structures" / "3u8v.cif").exists()
-    assert (output_dir / "structures" / "2crb.cif").exists()
+    assert (output_dir / "cleaned_structures" / "3u8v.cif").exists()
+    assert (output_dir / "cleaned_structures" / "2crb.cif").exists()
     assert (output_dir / "dataset_cache.json").exists()
-    assert (output_dir / "structure_files" / "3u8v" / "3u8v.npz").exists()
-    assert (output_dir / "structure_files" / "2crb" / "2crb.npz").exists()
+    assert (output_dir / "of3_compressed_structures" / "3u8v" / "3u8v.npz").exists()
+    assert (output_dir / "of3_compressed_structures" / "2crb" / "2crb.npz").exists()
     assert (msa_dir / "of3_alignments").is_dir()
 
     with warnings.catch_warnings():
@@ -229,7 +229,7 @@ def test_finetune_pipeline_orchestrator_e2e(
             name="pipeline-smoke",
             dataset_paths=TrainingDatasetPaths(
                 dataset_cache_file=output_dir / "dataset_cache.json",
-                target_structures_directory=output_dir / "structure_files",
+                target_structures_directory=output_dir / "of3_compressed_structures",
                 target_structure_file_format="npz",
                 alignments_directory=msa_dir / "of3_alignments",
                 reference_molecule_directory=output_dir / "reference_mols",

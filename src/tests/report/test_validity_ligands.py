@@ -121,9 +121,9 @@ def write_tiny_run(tmp_path, residues, bonds, input_residues=None):
     """
     structure = _structure(residues, bonds)
     out_dir = tmp_path / "out"
-    (out_dir / "structure_files" / PDB_ID).mkdir(parents=True)
+    (out_dir / "of3_compressed_structures" / PDB_ID).mkdir(parents=True)
     (out_dir / "manifest.json").write_text(json.dumps({"structures": [PDB_ID]}))
-    write_atomarray_to_npz(structure, out_dir / "structure_files" / PDB_ID / f"{PDB_ID}.npz")
+    write_atomarray_to_npz(structure, out_dir / "of3_compressed_structures" / PDB_ID / f"{PDB_ID}.npz")
     input_structure = structure if input_residues is None else _structure(input_residues, [])
     cif = pdbx.CIFFile()
     pdbx.set_structure(cif, input_structure[~np.isnan(input_structure.coord).any(axis=1)])
@@ -549,7 +549,7 @@ def test_identity_assembly_copy_uses_its_own_input_residue(tmp_path):
     inputs = write_tiny_run(tmp_path, kept, CHIRAL_BONDS, input_residues=far_mirrored + kept)
     cif = inputs.input_cif(PDB_ID)
     cif.write_text(cif.read_text() + OPERATORS)
-    npz = inputs.out_dir / "structure_files" / PDB_ID / f"{PDB_ID}.npz"
+    npz = inputs.out_dir / "of3_compressed_structures" / PDB_ID / f"{PDB_ID}.npz"
     first = read_atomarray_from_npz(npz)
     first.label_asym_id = np.array(["L_1"] * len(first))
     second = first.copy()

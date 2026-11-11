@@ -10,6 +10,8 @@ import biotite.structure.io.pdbx as pdbx
 from atomworks.ml.utils.misc import get_complex_id
 from atomworks.ml.utils.misc import hash_sequence as _hash_sequence
 
+from aw_of3_finetune.constants import CLEANED_STRUCTURES_DIRNAME
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,7 +81,7 @@ def collect_msa_queries(output_dir: Path) -> dict[str, str]:
     (e.g. no SEQRES) are skipped with a warning, a known limitation for benchmark CIFs.
 
     Args:
-        output_dir: finetune-prep output directory (manifest.json + structures/).
+        output_dir: finetune-prep output directory (manifest.json + cleaned_structures/).
 
     Returns:
         {alignment_representative_id: sequence}, deduplicated across structures.
@@ -88,7 +90,7 @@ def collect_msa_queries(output_dir: Path) -> dict[str, str]:
     pdb_ids: list[str] = slim.get("structures", [])
 
     rep_id_to_seq: dict[str, str] = {}
-    cif_dir = output_dir / "structures"
+    cif_dir = output_dir / CLEANED_STRUCTURES_DIRNAME
 
     for pdb_id in pdb_ids:
         cif_path = cif_dir / f"{pdb_id}.cif"
@@ -114,7 +116,7 @@ def collect_complex_queries(output_dir: Path) -> dict[str, list[str]]:
     protein sequence are kept (homomers and monomers have nothing to pair).
 
     Args:
-        output_dir: finetune-prep output directory (manifest.json + structures/).
+        output_dir: finetune-prep output directory (manifest.json + cleaned_structures/).
 
     Returns:
         {complex_id: unique sequences}, deduplicated across structures regardless of
@@ -125,7 +127,7 @@ def collect_complex_queries(output_dir: Path) -> dict[str, list[str]]:
     pdb_ids: list[str] = slim.get("structures", [])
 
     complex_id_to_seqs: dict[str, list[str]] = {}
-    cif_dir = output_dir / "structures"
+    cif_dir = output_dir / CLEANED_STRUCTURES_DIRNAME
 
     for pdb_id in pdb_ids:
         cif_path = cif_dir / f"{pdb_id}.cif"

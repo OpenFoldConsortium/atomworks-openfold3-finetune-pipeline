@@ -15,7 +15,7 @@ LIGAND_CHECKS = ["V4", "V8", "V9", "V10", "V11", "V12", "V18", "V19"]
 
 def _rewrite_npz(built, entry, edit):
     """Load an entry's NPZ arrays, apply `edit(arrays)` in place, and save them back."""
-    path = built.output_dir / "structure_files" / entry / f"{entry}.npz"
+    path = built.output_dir / "of3_compressed_structures" / entry / f"{entry}.npz"
     with np.load(path, allow_pickle=True) as data:
         arrays = {name: data[name] for name in data.files}
     edit(arrays)
@@ -155,11 +155,11 @@ def test_v9_detects_element_change(built_dataset, tmp_path):
 def _duplicate_entry(built, src, dst):
     """Copy entry `src` (CIF, NPZ and cache metadata) to a new entry `dst`."""
     out = built.output_dir
-    shutil.copy(out / "structures" / f"{src}.cif", out / "structures" / f"{dst}.cif")
-    (out / "structure_files" / dst).mkdir()
+    shutil.copy(out / "cleaned_structures" / f"{src}.cif", out / "cleaned_structures" / f"{dst}.cif")
+    (out / "of3_compressed_structures" / dst).mkdir()
     shutil.copy(
-        out / "structure_files" / src / f"{src}.npz",
-        out / "structure_files" / dst / f"{dst}.npz",
+        out / "of3_compressed_structures" / src / f"{src}.npz",
+        out / "of3_compressed_structures" / dst / f"{dst}.npz",
     )
     path = out / "dataset_cache.json"
     data = json.loads(path.read_text())
@@ -363,7 +363,7 @@ def test_ligand_severities(built_dataset):
 def test_v9_v10_per_entry_crash_reported_under_each_requested_id(built_dataset, tmp_path):
     """A corrupt NPZ is reported as an error under whichever of V9 or V10 was requested."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
-    (built.output_dir / "structure_files" / "7riv" / "7riv.npz").write_bytes(b"junk")
+    (built.output_dir / "of3_compressed_structures" / "7riv" / "7riv.npz").write_bytes(b"junk")
 
     for check in ("V9", "V10"):
         report = run_validation(context(built), [check])

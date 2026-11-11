@@ -547,6 +547,6 @@ def test_prepared_pdb_loads_through_of3(tmp_path, namer, ccd, ccd_path):
 
     actual_errors = [f"{f.check}: {f.message}" for f in report.errors]
     assert actual_errors == []
-    final = CIFFile.read(built.output_dir / "structures" / "x00242-1.cif").block
+    final = CIFFile.read(built.output_dir / "cleaned_structures" / "x00242-1.cif").block
     actual_sequence = final["entity_poly"]["pdbx_seq_one_letter_code_can"].as_array(str)[0].replace("\n", "")
     assert actual_sequence == PXR_CONSTRUCT

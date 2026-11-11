@@ -31,7 +31,7 @@ def _args(built, ccd_path, *extra):
 
 def _poison_3u8v(built):
     """Set one 3u8v coordinate to infinity so V5 reports an error for that entry."""
-    path = built.output_dir / "structure_files" / "3u8v" / "3u8v.npz"
+    path = built.output_dir / "of3_compressed_structures" / "3u8v" / "3u8v.npz"
     with np.load(path, allow_pickle=True) as data:
         arrays = {name: data[name] for name in data.files}
     arrays["coord"][0, 0] = np.inf
@@ -40,7 +40,7 @@ def _poison_3u8v(built):
 
 def _break_every_entry(built):
     """Set one coordinate to infinity in every entry's NPZ."""
-    for path in (built.output_dir / "structure_files").glob("*/*.npz"):
+    for path in (built.output_dir / "of3_compressed_structures").glob("*/*.npz"):
         with np.load(path, allow_pickle=True) as data:
             arrays = {name: data[name] for name in data.files}
         arrays["coord"][0, 0] = np.inf
@@ -91,7 +91,7 @@ def test_validate_cli_allow_errors_drops_entry(built_dataset, ccd_path, tmp_path
     assert "3u8v" not in manifest["structures"]
 
     # The dropped entry's NPZ stays on disk.
-    assert (built.output_dir / "structure_files" / "3u8v" / "3u8v.npz").exists()
+    assert (built.output_dir / "of3_compressed_structures" / "3u8v" / "3u8v.npz").exists()
 
 
 def test_validate_cli_defaults_template_structure_dir(built_dataset, ccd_path, monkeypatch, tmp_path):
@@ -346,7 +346,7 @@ def test_validate_cli_honors_custom_npz_dir(built_dataset, ccd_path, tmp_path):
     """--structures-npz-dir finds NPZ files that were moved out of the output directory."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     moved = tmp_path / "npz"
-    (built.output_dir / "structure_files").rename(moved)
+    (built.output_dir / "of3_compressed_structures").rename(moved)
 
     result = CliRunner().invoke(
         validate, _args(built, ccd_path, "--structures-npz-dir", str(moved)), catch_exceptions=False

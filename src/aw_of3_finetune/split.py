@@ -32,6 +32,7 @@ from openfold3.core.data.resources.residues import MoleculeType
 from rdkit import Chem, DataStructs
 from rdkit.Chem import rdFingerprintGenerator
 
+from aw_of3_finetune.constants import COMPRESSED_STRUCTURES_DIRNAME
 from aw_of3_finetune.msa import collect_msa_queries
 from aw_of3_finetune.pipeline import get_entity_component_info
 from aw_of3_finetune.templates import _GAP_PENALTY
@@ -233,7 +234,7 @@ def to_validation_cache(
 
     Every chain and interface is scored except ligands on OF3's metric exclusion list
     (AF3 SI Tables 9, 10, 12) and interfaces involving them; token and residue counts
-    come from each entry's NPZ under `<output_dir>/structure_files`.
+    come from each entry's NPZ under `<output_dir>/of3_compressed_structures`.
 
     Args:
         cache: The full dataset cache.
@@ -254,7 +255,7 @@ def to_validation_cache(
     mol_ids: set[str] = set()
     for pdb_id in sorted(val_ids):
         entry = cache.structure_data[pdb_id]
-        npz_path = Path(output_dir) / "structure_files" / pdb_id / f"{pdb_id}.npz"
+        npz_path = Path(output_dir) / COMPRESSED_STRUCTURES_DIRNAME / pdb_id / f"{pdb_id}.npz"
         atom_array = read_atomarray_from_npz(npz_path)
         counts, entry_mol_ids = _residue_counts_and_mol_ids(atom_array, pdb_id)
         residue_counts.update(counts)

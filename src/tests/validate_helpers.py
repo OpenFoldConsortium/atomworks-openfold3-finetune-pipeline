@@ -65,7 +65,7 @@ def build_dataset(
     assert result.exit_code == 0, result.output
 
     # Convert the cleaned structures to NPZ.
-    save_structures_as_npz(output_dir / "structures", output_dir / "structure_files")
+    save_structures_as_npz(output_dir / "cleaned_structures", output_dir / "of3_compressed_structures")
     msa_dir = root / "msa"
     # One stub MSA per representative sequence, containing only the query row.
     for rep_id, sequence in collect_msa_queries(output_dir).items():

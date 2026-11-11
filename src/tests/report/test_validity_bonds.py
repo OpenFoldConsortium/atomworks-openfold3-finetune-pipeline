@@ -60,9 +60,9 @@ def write_tiny_run(tmp_path, res_name, names, xs, bonds, chains=None):
     structure = array(atoms)
     structure.bonds = BondList(len(atoms), np.array(bonds, dtype=int).reshape(-1, 3))
     out_dir = tmp_path / "out"
-    (out_dir / "structure_files" / PDB_ID).mkdir(parents=True)
+    (out_dir / "of3_compressed_structures" / PDB_ID).mkdir(parents=True)
     (out_dir / "manifest.json").write_text(json.dumps({"structures": [PDB_ID]}))
-    write_atomarray_to_npz(structure, out_dir / "structure_files" / PDB_ID / f"{PDB_ID}.npz")
+    write_atomarray_to_npz(structure, out_dir / "of3_compressed_structures" / PDB_ID / f"{PDB_ID}.npz")
     (tmp_path / "ccd.cif").write_text(TINY_CCD)
     return ValidityInputs(out_dir, tmp_path / "cifs", tmp_path / "ccd.cif")
 

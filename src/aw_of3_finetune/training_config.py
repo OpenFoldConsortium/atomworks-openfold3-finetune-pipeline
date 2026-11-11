@@ -16,6 +16,7 @@ from typing import Any
 import click
 import yaml
 
+from aw_of3_finetune.constants import COMPRESSED_STRUCTURES_DIRNAME
 from aw_of3_finetune.split import SplitPaths, dataset_cache_sha256, split_paths
 from aw_of3_finetune.templates import TEMPLATE_DATA_DIRNAME
 
@@ -168,7 +169,7 @@ def build_dataset_paths(output_dir: Path, msa_dir: Path) -> dict[str, Any]:
     """Build the weighted-pdb dataset paths for the full dataset cache.
 
     Args:
-        output_dir: Pipeline output directory (dataset_cache.json, structure_files/, ...).
+        output_dir: Pipeline output directory (dataset_cache.json, of3_compressed_structures/, ...).
         msa_dir: The --msa-dir; template paths are added if preprocess-templates has run.
 
     Returns:
@@ -180,7 +181,7 @@ def build_dataset_paths(output_dir: Path, msa_dir: Path) -> dict[str, Any]:
             "alignment_db_directory": "none",
             "alignment_array_directory": "none",
             "dataset_cache_file": str(output_dir / "dataset_cache.json"),
-            "target_structures_directory": str(output_dir / "structure_files"),
+            "target_structures_directory": str(output_dir / COMPRESSED_STRUCTURES_DIRNAME),
             "target_structure_file_format": "npz",
             "reference_molecule_directory": str(output_dir / "reference_mols"),
             "template_cache_directory": "none",
@@ -214,7 +215,7 @@ def build_train_config(
 
     Args:
         output_dir: finetune-prep/materialize-dataset-cache output directory
-            (dataset_cache.json, structure_files/, reference_mols/).
+            (dataset_cache.json, of3_compressed_structures/, reference_mols/).
         msa_dir: The --msa-dir passed to generate-msas/materialize-dataset-cache;
             alignments_directory is set to ``{msa_dir}/of3_alignments``. Required
             (see module docstring).

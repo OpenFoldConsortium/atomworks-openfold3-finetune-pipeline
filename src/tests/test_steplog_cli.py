@@ -113,7 +113,7 @@ def test_unreadable_input_table_still_prepares(tmp_path: Path, ccd_path: Path, c
             catch_exceptions=False,
         )
 
-    actual_cif = output_dir / "structures" / "1ubq.cif"
+    actual_cif = output_dir / "cleaned_structures" / "1ubq.cif"
     assert result.exit_code == 0, result.output
     assert _without_write_time(actual_cif) == _without_write_time(expected_cif)
     assert "step log" in caplog.text
@@ -135,7 +135,7 @@ def test_failing_structure_is_dropped_and_the_rest_prepared(tmp_path: Path):
     [actual_dropped] = json.loads((output_dir / "prep_dropped.json").read_text())
     assert actual_dropped["id"] == "bad"
     assert actual_dropped["reason"].startswith("failed: ")
-    assert not (output_dir / "structures" / "bad.cif").exists()
+    assert not (output_dir / "cleaned_structures" / "bad.cif").exists()
 
 
 def test_emptied_structure_is_recorded_as_dropped(tmp_path: Path):
