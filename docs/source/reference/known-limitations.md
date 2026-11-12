@@ -22,7 +22,7 @@ The docs download OpenFold3's copy of the CCD, whose newest entry is from May 20
 | **Protein MSAs only** | ColabFold searches proteins only, and `train.yml` reads protein MSAs only, so RNA and DNA chains get no MSA. Structures with RNA load and train, but expect worse RNA predictions than OpenFold3's. |
 | **No cross-chain MSA pairing from ColabFold** | Complexes get no pairing signal from ColabFold MSAs. OpenFold3 finds pairing data by filename, and ColabFold's output does not match. Your own `uniprot_hits` MSAs, with species in their headers, do give pairing: see [Use your own MSAs](../how-to/user-msas.md). |
 | **No templates with your own MSAs** | `--msa-sources` skips the template stages. |
-| **Your own MSAs must be on local disk** | Copy them from cloud storage first. |
+| **Your own MSAs must be on local disk** | The pipeline does not read MSAs from cloud storage. |
 
 ## Templates
 

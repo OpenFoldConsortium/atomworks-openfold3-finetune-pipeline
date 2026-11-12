@@ -2,17 +2,12 @@
 
 By default the pipeline sends every protein sequence to the public ColabFold server. If your sequences cannot leave your network, search them yourself (with a local ColabFold or MMseqs2 server, HHblits, jackhmmer, or anything else that writes A3M) and give the pipeline the results instead. ColabFold is then never contacted.
 
-## 1. Get the MSAs onto local disk
+## What you need
 
-The pipeline reads local files only. If your MSAs are in cloud storage, copy them first:
+- **Local copies of your MSAs.** The pipeline reads files on local disk only.
+- **One unpaired MSA per sequence, as A3M** (`.a3m`, `.a3m.gz` or `.a3m.zst`), with the query as the first sequence. File and folder names do not matter: each file is matched to the chains in your dataset by its query sequence.
 
-```bash
-aws s3 sync s3://<bucket>/<prefix> user_msas/
-```
-
-Each file must be an unpaired, single-sequence A3M (`.a3m`, `.a3m.gz` or `.a3m.zst`) whose first sequence is the query. File and folder names do not matter: each file is matched to the chains in your dataset by its query sequence.
-
-## 2. Write a sources manifest
+## 1. Write a sources manifest
 
 A sources manifest is a YAML or JSON file. Each key is an MSA source name, and each value is the folder or glob holding that source's files. Relative paths are read from the manifest's own folder.
 
@@ -35,7 +30,7 @@ For `uniprot_hits` and `uniprot`, every header after the query must look like `t
 
 `colabfold_paired`, `dummy` and `templates` are not allowed: they mean something else to OpenFold3 or the pipeline. Pre-paired MSAs are not supported, because OpenFold3 training pairs MSAs itself from `uniprot_hits`.
 
-## 3. Run the pipeline
+## 2. Run the pipeline
 
 ```bash
 pixi run finetune-pipeline \
