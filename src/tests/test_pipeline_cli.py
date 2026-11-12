@@ -1669,3 +1669,84 @@ class TestOrganizedMsaDirOption:
         assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq)
                 / "colabfold_main.a3m").exists()
         assert _train_alignments_dir(output_dir) == str(output_dir / "organized_msas" / "of3_alignments")
+
+
+
+# ── TestFinetunePipelineMsaSources (run-all with user MSAs) ──────────────────
+
+
+class TestFinetunePipelineMsaSources:
+    @pytest.fixture
+    def no_colabfold(self, monkeypatch):
+        monkeypatch.setattr(
+            cli_mod, "make_msas_colabfold_server_batch",
+            lambda *a, **k: pytest.fail("ColabFold must not be called"),
+        )
+
+    @staticmethod
+    def _inputs(cif_protein_monomer, tmp_path) -> tuple[Path, Path, str]:
+        """(cif_dir, manifest, sequence): 3u8v plus a user MSA for its chain under source my_lab_db."""
+        cif_dir = tmp_path / "input"
+        cif_dir.mkdir()
+        (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        user = tmp_path / "user_msas"
+        user.mkdir()
+        (user / "chain_a.a3m").write_text(f">query\n{seq}\n>hit\nW{seq[1:]}\n")
+        manifest = tmp_path / "msa_sources.yml"
+        manifest.write_text("my_lab_db: user_msas\n")
+        return cif_dir, manifest, seq
+
+    @staticmethod
+    def _run(cif_dir, output_dir, ccd_path, *extra):
+        return CliRunner().invoke(finetune_pipeline, [
+            "--cif-dir", str(cif_dir), "--output-dir", str(output_dir), "--ccd-path", str(ccd_path),
+            "--skip-report", "--skip-dataset-load", *extra,
+        ], catch_exceptions=False)
+
+    def test_msa_sources_runs_import_not_colabfold(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        cif_dir, manifest, seq = self._inputs(cif_protein_monomer, tmp_path)
+        output_dir, msa_dir = tmp_path / "out", tmp_path / "msas"
+
+        result = self._run(cif_dir, output_dir, ccd_path, "--organized-msa-dir", str(msa_dir), "--msa-sources", str(manifest))
+
+        assert result.exit_code == 0, result.output
+        assert "Stage 2/10: import-msas" in result.output
+        assert "templates with --msa-sources are not supported yet" in result.output
+        assert (msa_dir / "of3_alignments" / alignment_rep_id(seq) / "my_lab_db.a3m").exists()
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        assert "my_lab_db" in config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"]["max_seq_counts"]
+
+    def test_msa_sources_uses_default_folder(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        cif_dir, manifest, seq = self._inputs(cif_protein_monomer, tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = self._run(cif_dir, output_dir, ccd_path, "--msa-sources", str(manifest))
+
+        assert result.exit_code == 0, result.output
+        assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq) / "my_lab_db.a3m").exists()
+        assert (output_dir / "train.yml").exists()
+
+    @pytest.mark.parametrize("flag", [
+        ["--templates"], ["--server", "https://example.org"], ["--user-agent", "me"], ["--skip-existing"],
+    ])
+    def test_msa_sources_rejects_colabfold_only_flags(self, cif_protein_monomer, ccd_path, tmp_path, flag):
+        """Flags that only affect ColabFold or templates would silently do nothing: refused before stage 1."""
+        cif_dir, manifest, _ = self._inputs(cif_protein_monomer, tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = CliRunner().invoke(finetune_pipeline, [
+            "--cif-dir", str(cif_dir), "--output-dir", str(output_dir), "--ccd-path", str(ccd_path),
+            "--msa-sources", str(manifest), *flag,
+        ])
+
+        assert result.exit_code == 2
+        assert flag[0] in result.output
+        assert not (output_dir / "manifest.json").exists()
+
+    def test_msa_sources_accepts_explicit_no_templates(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        cif_dir, manifest, _ = self._inputs(cif_protein_monomer, tmp_path)
+
+        result = self._run(cif_dir, tmp_path / "out", ccd_path, "--msa-sources", str(manifest), "--no-templates")
+
+        assert result.exit_code == 0, result.output

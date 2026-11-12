@@ -1084,6 +1084,15 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     "<output-dir>/organized_msas folder left by an earlier run is still used by the later stages.",
 )
 @click.option(
+    "--msa-sources",
+    default=None,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="Use your own MSAs instead of ColabFold: a YAML/JSON file mapping each MSA source name to a "
+    "directory or glob of A3M files (see import-msas). They are imported into --organized-msa-dir "
+    "(default <output-dir>/organized_msas). ColabFold is never contacted, and the template stages "
+    "are skipped.",
+)
+@click.option(
     "--ccd-path",
     required=True,
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
@@ -1188,6 +1197,7 @@ def finetune_pipeline(
     cif_dir: Path,
     output_dir: Path,
     msa_dir: Path | None,
+    msa_sources: Path | None,
     ccd_path: Path,
     template_cache_dir: Path | None,
     name: str,
@@ -1211,15 +1221,23 @@ def finetune_pipeline(
 ) -> None:
     """Run every pipeline stage end-to-end over a directory of CIFs.
 
-    finetune-prep -> generate-msas -> fetch-templates -> materialize-dataset-cache ->
+    finetune-prep -> generate-msas (or import-msas with --msa-sources) -> fetch-templates ->
+    materialize-dataset-cache ->
     preprocess-templates -> NPZ -> split-dataset (with --split-csv) -> generate-train-config ->
     validate -> report. All but finetune-prep, materialize, NPZ, validate and report need
     an MSA folder (--organized-msa-dir, or an existing <output-dir>/organized_msas); the
     template stages also need --templates and MSAs generated in this run.
     """
-    run_colabfold = msa_dir is not None  # only an explicit --organized-msa-dir contacts ColabFold
-    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=True)
+    if msa_sources is not None:
+        _refuse_colabfold_flags_with_msa_sources(ctx, templates)
+    # Only an explicit --organized-msa-dir without --msa-sources contacts ColabFold.
+    run_colabfold = msa_dir is not None and msa_sources is None
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=msa_sources is None)
     run_templates = run_colabfold and templates
+    templates_skipped = (
+        "templates with --msa-sources are not supported yet" if msa_sources is not None
+        else "no --organized-msa-dir or --no-templates"
+    )
     if split_csv is not None:
         default_cache = output_dir / DATASET_CACHE_NAME
         if cache_output is not None and cache_output.resolve() != default_cache.resolve():
@@ -1254,7 +1272,10 @@ def finetune_pipeline(
         cleanup_settings=cleanup_settings,
     )
 
-    if run_colabfold:
+    if msa_sources is not None:
+        click.echo("\n=== Stage 2/10: import-msas ===")
+        ctx.invoke(import_msas, output_dir=output_dir, msa_dir=msa_dir, manifest_path=msa_sources)
+    elif run_colabfold:
         click.echo("\n=== Stage 2/10: generate-msas ===")
         ctx.invoke(
             generate_msas,
@@ -1272,7 +1293,7 @@ def finetune_pipeline(
         click.echo("\n=== Stage 3/10: fetch-templates ===")
         ctx.invoke(fetch_templates, output_dir=output_dir, msa_dir=msa_dir)
     else:
-        click.echo("\n=== Stage 3/10: fetch-templates -- skipped (no --organized-msa-dir or --no-templates) ===")
+        click.echo(f"\n=== Stage 3/10: fetch-templates -- skipped ({templates_skipped}) ===")
 
     click.echo("\n=== Stage 4/10: materialize-dataset-cache ===")
     ctx.invoke(
@@ -1293,7 +1314,7 @@ def finetune_pipeline(
         )
     else:
         click.echo(
-            "\n=== Stage 5/10: preprocess-templates -- skipped (no --organized-msa-dir or --no-templates) ==="
+            f"\n=== Stage 5/10: preprocess-templates -- skipped ({templates_skipped}) ==="
         )
 
     click.echo("\n=== Stage 6/10: NPZ structure files ===")
@@ -1361,6 +1382,30 @@ def finetune_pipeline(
         raise validate_exit
 
     click.echo("\nDone.")
+
+
+def _refuse_colabfold_flags_with_msa_sources(ctx: click.Context, templates: bool) -> None:
+    """Refuse options that would silently do nothing next to --msa-sources.
+
+    Args:
+        ctx: finetune-pipeline's context.
+        templates: The --templates/--no-templates value (an explicit --no-templates is fine).
+
+    Raises:
+        click.UsageError: Naming the first such option given on the command line.
+    """
+    explicit = {
+        name for name in ("templates", "server", "user_agent", "skip_existing")
+        if ctx.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE
+    }
+    if "templates" in explicit and not templates:
+        explicit.discard("templates")
+    for name, flag in (("templates", "--templates"), ("server", "--server"),
+                       ("user_agent", "--user-agent"), ("skip_existing", "--skip-existing")):
+        if name in explicit:
+            reason = ("templates with --msa-sources are not supported yet" if name == "templates"
+                      else "it only applies to ColabFold, which --msa-sources replaces")
+            raise click.UsageError(f"{flag} cannot be used with --msa-sources: {reason}.")
 
 
 def _warn_report_failed(inputs: ValidityInputs, error: Exception) -> None:
