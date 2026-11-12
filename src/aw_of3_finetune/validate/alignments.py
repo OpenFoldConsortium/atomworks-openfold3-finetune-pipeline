@@ -70,7 +70,7 @@ def _sources_read_by_train_yml(ctx: ValidationContext) -> set[str] | None:
     return set(counts) & used
 
 
-def _check_v13(ctx: ValidationContext, entry: str, read_by_train_yml: set[str] | None) -> list[Finding]:
+def _msa_query_row_findings(ctx: ValidationContext, entry: str, read_by_train_yml: set[str] | None) -> list[Finding]:
     findings = []
     for key, rep_id, sequence in _aligned_chains(ctx, entry):
         rep_dir = ctx.msa_dir / "of3_alignments" / rep_id
@@ -112,7 +112,7 @@ def check_v13_msa_query_rows(ctx: ValidationContext) -> list[Finding]:
     if ctx.msa_dir is None:
         return [Finding("V13", Severity.INFO, None, "skipped: no --organized-msa-dir")]
     read_by_train_yml = _sources_read_by_train_yml(ctx)
-    return _per_entry(ctx, "V13", lambda c, e: _check_v13(c, e, read_by_train_yml))
+    return _per_entry(ctx, "V13", lambda c, e: _msa_query_row_findings(c, e, read_by_train_yml))
 
 
 def check_v14_rep_ids_by_sequence(ctx: ValidationContext) -> list[Finding]:

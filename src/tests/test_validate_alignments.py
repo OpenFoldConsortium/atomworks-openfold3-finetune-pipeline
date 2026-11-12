@@ -55,7 +55,7 @@ def test_alignment_checks_pass_on_clean_build(built_dataset):
     assert info_checks == ["V15"]
 
 
-def test_v13_detects_wrong_query_row(built_dataset, tmp_path):
+def test_msa_query_row_differing_from_chain_is_an_error(built_dataset, tmp_path):
     """V13 errors when an MSA's first row is not the chain's own sequence."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     rep_id = None
@@ -75,13 +75,13 @@ def test_v13_detects_wrong_query_row(built_dataset, tmp_path):
     report = run_validation(context(built), ["V13"])
 
     # Every V13 finding on 2crb is an error, and the first one explains the cause.
-    v13_findings = _hits(report, "V13", "2crb")
-    assert len(v13_findings) > 0
-    assert {f.severity for f in v13_findings} == {Severity.ERROR}
-    assert "first MSA row differs" in v13_findings[0].message
+    query_row_findings = _hits(report, "V13", "2crb")
+    assert len(query_row_findings) > 0
+    assert {f.severity for f in query_row_findings} == {Severity.ERROR}
+    assert "first MSA row differs" in query_row_findings[0].message
 
 
-def test_v13_ignores_lowercase_insertions(built_dataset, tmp_path):
+def test_lowercase_msa_insertions_do_not_change_the_query_row(built_dataset, tmp_path):
     """Lowercase letters in an a3m are insertions, so they do not change the query row."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     for a3m in (built.msa_dir / "of3_alignments").glob("*/colabfold_main.a3m"):

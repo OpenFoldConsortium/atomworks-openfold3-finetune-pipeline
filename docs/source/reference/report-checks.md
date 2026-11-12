@@ -27,7 +27,7 @@ These run in the `validate` stage. An error stops the pipeline with exit code 1,
 | V10 | Ligands | Crystal heavy atoms have names the SDF knows |
 | V11 | Ligands | Residues sharing an SDF agree on elements and bonds. Ligands with names outside the CCD must match exactly |
 | V12 | Ligands | Every reference SDF sanitizes in RDKit |
-| V13 | MSAs | Each chain's MSA query row equals its sequence |
+| V13 | MSAs | Each chain's MSA query row equals its sequence, and `train.yml` reads every MSA source |
 | V14 | MSAs | `alignment_representative_id` is the sequence's hash |
 | V15 | Templates | Every template ID resolves to a structure file |
 | V16 | Templates | Each template predates its structure, or the fixed cutoff |

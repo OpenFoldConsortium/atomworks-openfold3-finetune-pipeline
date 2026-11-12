@@ -137,9 +137,9 @@ def test_run_without_msa_dir_skips_msa_checks(built_dataset):
     assert msa_check_findings == []
 
     # V13 emits a single INFO finding explaining the missing MSA dir.
-    v13_findings = [f for f in report.findings if f.check == "V13"]
-    assert [f.severity for f in v13_findings] == [Severity.INFO]
-    assert "no --organized-msa-dir" in v13_findings[0].message
+    msa_check_findings = [f for f in report.findings if f.check == "V13"]
+    assert [f.severity for f in msa_check_findings] == [Severity.INFO]
+    assert "no --organized-msa-dir" in msa_check_findings[0].message
 
 
 def test_unknown_check_id_raises(built_dataset):
