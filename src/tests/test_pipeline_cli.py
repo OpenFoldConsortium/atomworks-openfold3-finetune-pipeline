@@ -504,7 +504,7 @@ class TestReorganizeMsasForOf3:
             reorganize_msas_for_of3(output_dir, msa_dir, msa_dir / "of3_alignments")
 
     def test_cli_msa_dir_flag_reorganizes(self, cif_protein_monomer, tmp_path):
-        """materialize-dataset-cache --msa-dir reorganizes MSAs as a side effect."""
+        """materialize-dataset-cache --organized-msa-dir reorganizes MSAs as a side effect."""
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
@@ -954,7 +954,7 @@ class TestFinetunePipeline:
     def test_runs_all_stages_without_msa_dir(
         self, cif_protein_monomer, cif_protein_only, ccd_path, tmp_path
     ):
-        """Without --msa-dir, generate-msas and generate-train-config are skipped but
+        """Without --organized-msa-dir, generate-msas and generate-train-config are skipped but
         every other stage writes its artifact (CIFs, manifest, cache, NPZs)."""
         # No train.yml: OF3's training schema requires a real alignments directory.
         cif_dir = tmp_path / "input"

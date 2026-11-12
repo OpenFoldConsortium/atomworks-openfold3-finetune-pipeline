@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 DOWNLOAD_ATTEMPTS = 4
 FIRST_RETRY_WAIT_SECONDS = 5  # then 10 and 20
 
-# Layout under --msa-dir, next to generate-msas' unpaired/ paired/ templates/.
+# Layout under --organized-msa-dir, next to generate-msas' unpaired/ paired/ templates/.
 TEMPLATE_ALIGNMENTS_DIRNAME = "of3_template_alignments"  # <rep_id>/colabfold_template.m8
 TEMPLATE_ALIGNMENT_FILENAME = "colabfold_template.m8"
 TEMPLATE_STRUCTURES_DIRNAME = "template_structures"  # flat <pdb_id>.cif

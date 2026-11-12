@@ -401,7 +401,7 @@ def test_validation_json_records_no_drop_without_allow_errors(built_dataset, ccd
 
 
 def test_validate_rejects_nonexistent_msa_dir(built_dataset, ccd_path, tmp_path):
-    """A nonexistent --msa-dir is a usage error (exit 2) that names the option."""
+    """A nonexistent --organized-msa-dir is a usage error (exit 2) that names the option."""
     args = _args(built_dataset, ccd_path)
     args[args.index("--organized-msa-dir") + 1] = str(tmp_path / "nope")
 
@@ -444,7 +444,7 @@ def test_finetune_pipeline_skip_dataset_load(cif_protein_monomer, ccd_path, tmp_
 
 
 def _split_with_train_yml(built, tmp_path, csv_text):
-    """Run split-dataset --msa-dir on a built dataset, writing split/ and train.yml."""
+    """Run split-dataset --organized-msa-dir on a built dataset, writing split/ and train.yml."""
     csv = tmp_path / "my_split.csv"
     csv.write_text(csv_text)
     result = CliRunner().invoke(split_dataset, [

@@ -127,7 +127,7 @@ def test_missing_npz_is_a_finding(built_dataset, tmp_path, monkeypatch):
 
 
 def test_run_without_msa_dir_skips_msa_checks(built_dataset):
-    """Without --msa-dir the MSA checks (V8-V10) are silent and V13 notes they were skipped."""
+    """Without --organized-msa-dir the MSA checks (V8-V10) are silent and V13 notes they were skipped."""
     ctx = context(built_dataset, msa_dir=None)
 
     report = run_validation(ctx)
@@ -139,7 +139,7 @@ def test_run_without_msa_dir_skips_msa_checks(built_dataset):
     # V13 emits a single INFO finding explaining the missing MSA dir.
     v13_findings = [f for f in report.findings if f.check == "V13"]
     assert [f.severity for f in v13_findings] == [Severity.INFO]
-    assert "no --msa-dir" in v13_findings[0].message
+    assert "no --organized-msa-dir" in v13_findings[0].message
 
 
 def test_unknown_check_id_raises(built_dataset):

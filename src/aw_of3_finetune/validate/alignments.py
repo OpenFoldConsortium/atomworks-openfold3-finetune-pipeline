@@ -7,7 +7,9 @@ import re
 from datetime import date
 
 import numpy as np
+import yaml
 from biotite.structure.io.pdbx import CIFFile
+from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
 
 from aw_of3_finetune.constants import PREPARE_RECORD_FILE, TEMPLATE_CUTOFF_FILENAME, TEMPLATE_CUTOFF_NOTE
 from aw_of3_finetune.msa import alignment_rep_id
@@ -16,7 +18,6 @@ from aw_of3_finetune.validate.findings import Finding, Severity
 from aw_of3_finetune.validate.structure import _entity_sequences, _per_entry
 
 PLACEHOLDER_RELEASE_DATE = "1970-01-01"
-MAIN_ALIGNMENT = "colabfold_main.a3m"
 
 
 def _aligned_chains(ctx: ValidationContext, entry: str) -> list[tuple[str, str, str]]:
@@ -44,37 +45,74 @@ def _first_a3m_sequence(path) -> str:
     return re.sub("[a-z]", "", "".join(seq))
 
 
-def _check_v13(ctx: ValidationContext, entry: str) -> list[Finding]:
-    findings = []
-    for key, rep_id, sequence in _aligned_chains(ctx, entry):
-        path = ctx.msa_dir / "of3_alignments" / rep_id / MAIN_ALIGNMENT
-        if not path.exists():
-            findings.append(
-                Finding("V13", Severity.ERROR, entry, f"chain {key}: missing {path}", {"chain": key, "rep_id": rep_id})
-            )
-        elif _first_a3m_sequence(path) != sequence:
-            findings.append(
-                Finding(
-                    "V13", Severity.ERROR, entry,
-                    f"chain {key}: first MSA row differs from chain sequence",
-                    {"chain": key, "rep_id": rep_id},
-                )
-            )  # fmt: skip
-    return findings
+def _sources_read_by_train_yml(ctx: ValidationContext) -> set[str] | None:
+    """The alignment stems OpenFold3 reads with train.yml's train msa section.
 
-
-def check_v13_msa_query_rows(ctx: ValidationContext) -> list[Finding]:
-    """V13: each aligned chain's MSA query row equals its chain sequence.
+    A stem is read if it is a key of max_seq_counts and is either stacked (aln_order)
+    or paired on (msas_to_pair). Values missing from the section are OpenFold3's defaults.
 
     Args:
         ctx: Validation context.
 
     Returns:
-        E findings for missing or mismatched MSAs; one INFO when there is no msa_dir.
+        The stems, or None when there is no train.yml.
+    """
+    path = ctx.output_dir / "train.yml"
+    if not path.exists():
+        return None
+    config = yaml.safe_load(path.read_text()) or {}
+    section = (
+        config.get("dataset_configs", {}).get("train", {}).get("weighted-pdb", {}).get("config", {}).get("msa", {})
+    ) or {}
+    defaults = MSASettings()
+    counts = section.get("max_seq_counts", defaults.max_seq_counts)
+    used = set(section.get("aln_order", defaults.aln_order)) | set(section.get("msas_to_pair", defaults.msas_to_pair))
+    return set(counts) & used
+
+
+def _check_v13(ctx: ValidationContext, entry: str, read_by_train_yml: set[str] | None) -> list[Finding]:
+    findings = []
+    for key, rep_id, sequence in _aligned_chains(ctx, entry):
+        rep_dir = ctx.msa_dir / "of3_alignments" / rep_id
+        a3ms = sorted(rep_dir.glob("*.a3m")) if rep_dir.is_dir() else []
+        if not a3ms:
+            findings.append(
+                Finding("V13", Severity.ERROR, entry, f"chain {key}: missing {rep_dir}/<source>.a3m",
+                        {"chain": key, "rep_id": rep_id})
+            )  # fmt: skip
+        for path in a3ms:
+            detail = {"chain": key, "rep_id": rep_id, "source": path.stem}
+            if _first_a3m_sequence(path) != sequence:
+                findings.append(
+                    Finding("V13", Severity.ERROR, entry,
+                            f"chain {key}: first MSA row differs from chain sequence ({path.name})", detail)
+                )  # fmt: skip
+            if read_by_train_yml is not None and path.stem not in read_by_train_yml:
+                findings.append(
+                    Finding("V13", Severity.ERROR, entry,
+                            f"chain {key}: {path.name} is never read by train.yml (not in its msa "
+                            "max_seq_counts and aln_order); regenerate train.yml with generate-train-config",
+                            detail)
+                )  # fmt: skip
+    return findings
+
+
+def check_v13_msa_query_rows(ctx: ValidationContext) -> list[Finding]:
+    """V13: every MSA's query row equals its chain sequence, and train.yml reads every MSA source.
+
+    Checks each ``of3_alignments/<rep_id>/<source>.a3m``. When ``<output-dir>/train.yml``
+    exists, a source its msa section never reads is an error: training would ignore it.
+
+    Args:
+        ctx: Validation context.
+
+    Returns:
+        E findings for missing, mismatched or unread MSAs; one INFO when there is no MSA folder.
     """
     if ctx.msa_dir is None:
-        return [Finding("V13", Severity.INFO, None, "skipped: no --msa-dir")]
-    return _per_entry(ctx, "V13", _check_v13)
+        return [Finding("V13", Severity.INFO, None, "skipped: no --organized-msa-dir")]
+    read_by_train_yml = _sources_read_by_train_yml(ctx)
+    return _per_entry(ctx, "V13", lambda c, e: _check_v13(c, e, read_by_train_yml))
 
 
 def check_v14_rep_ids_by_sequence(ctx: ValidationContext) -> list[Finding]:

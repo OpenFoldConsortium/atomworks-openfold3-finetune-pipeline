@@ -265,7 +265,7 @@ def test_skipped_pipeline_checks_are_not_run(tmp_path):
     findings = [
         v_finding(None, "I", "V16", "skipped: no --template-cache-dir"),
         v_finding(None, "I", "V7", "fine"),
-        v_finding("a", "I", "V13", "skipped: no --msa-dir"),
+        v_finding("a", "I", "V13", "skipped: no --organized-msa-dir"),
     ]
     inputs = make_inputs(tmp_path, ["a"], validation={"entries_in": ["a"], "findings": findings})
 

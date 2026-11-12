@@ -41,7 +41,7 @@ def test_v21_reports_failing_entry(built_dataset, tmp_path):
 
 
 def test_v21_without_msa_dir_is_info(built_dataset):
-    """Without --msa-dir the dataset cannot be loaded, so V21 emits one dataset-wide INFO."""
+    """Without --organized-msa-dir the dataset cannot be loaded, so V21 emits one dataset-wide INFO."""
     report = run_validation(context(built_dataset, msa_dir=None), ["V21"])
 
     actual_findings = [(f.check, f.severity, f.entry) for f in report.findings]

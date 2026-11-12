@@ -211,7 +211,7 @@ def build_dataset_paths(output_dir: Path, msa_dir: Path) -> dict[str, Any]:
 
     Args:
         output_dir: Pipeline output directory (dataset_cache.json, of3_compressed_structures/, ...).
-        msa_dir: The --msa-dir; template paths are added if preprocess-templates has run.
+        msa_dir: The --organized-msa-dir; template paths are added if preprocess-templates has run.
 
     Returns:
         ``{"weighted-pdb": {...}}``, never looking at ``split/``.
@@ -257,7 +257,7 @@ def build_train_config(
     Args:
         output_dir: finetune-prep/materialize-dataset-cache output directory
             (dataset_cache.json, of3_compressed_structures/, reference_mols/).
-        msa_dir: The --msa-dir passed to generate-msas/materialize-dataset-cache;
+        msa_dir: The --organized-msa-dir passed to generate-msas/materialize-dataset-cache;
             alignments_directory is set to ``{msa_dir}/of3_alignments``. Required
             (see module docstring).
         training_output_dir: Where Lightning writes checkpoints/logs. Defaults to
@@ -344,7 +344,7 @@ def write_train_config(
 
     Args:
         output_dir: finetune-prep/materialize-dataset-cache output directory.
-        msa_dir: The --msa-dir passed to generate-msas/materialize-dataset-cache.
+        msa_dir: The --organized-msa-dir passed to generate-msas/materialize-dataset-cache.
         config_path: Where to write; defaults to ``{output_dir}/train.yml``.
         **build_kwargs: Passed to build_train_config (wandb_* etc.).
 
