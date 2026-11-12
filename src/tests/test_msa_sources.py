@@ -158,6 +158,48 @@ class TestLoadManifest:
         with pytest.raises(MsaSourcesError, match="no sources"):
             load_msa_sources_manifest(manifest)
 
+    def test_msa_folder_reads_its_index(self, tmp_path):
+        """An MSA folder from an earlier run is its own manifest: its msa_index.yml lists the sources."""
+        folder = tmp_path / "old_run" / "organized_msas"
+        stored = _touch(folder / "unpaired" / "ab" / "abc.a3m.gz")
+        _write_index(folder, {"colabfold_main": "unpaired"})
+
+        specs = load_msa_sources_manifest(folder)
+
+        assert list(specs) == ["colabfold_main"]
+        assert specs["colabfold_main"].files == [stored.resolve()]
+
+    def test_msa_folder_of_user_sources(self, tmp_path):
+        folder = tmp_path / "old_run" / "organized_msas"
+        a = _touch(folder / "msa_sources" / "a" / "ab" / "abc.a3m.gz")
+        b = _touch(folder / "msa_sources" / "b" / "cd" / "cde.a3m.gz")
+        _write_index(folder, {"a": "msa_sources/a", "b": "msa_sources/b"})
+
+        specs = load_msa_sources_manifest(folder)
+
+        assert {name: spec.files for name, spec in specs.items()} == {"a": [a.resolve()], "b": [b.resolve()]}
+
+    def test_legacy_colabfold_folder_without_index(self, tmp_path):
+        """A ColabFold folder from before the index existed reads as colabfold_main."""
+        folder = tmp_path / "msas"
+        stored = _touch(folder / "unpaired" / "ab" / "abc.a3m.gz")
+
+        assert load_msa_sources_manifest(folder)["colabfold_main"].files == [stored.resolve()]
+
+    def test_folder_without_msas_errors(self, tmp_path):
+        """A folder that is not an MSA folder says so, rather than importing nothing."""
+        _touch(tmp_path / "random" / "notes.txt")
+
+        with pytest.raises(MsaSourcesError, match="no MSA sources"):
+            load_msa_sources_manifest(tmp_path / "random")
+
+    def test_folder_whose_store_is_missing_errors(self, tmp_path):
+        folder = tmp_path / "msas"
+        _write_index(folder, {"gone": "msa_sources/gone"})
+
+        with pytest.raises(MsaSourcesError, match="msa_sources/gone"):
+            load_msa_sources_manifest(folder)
+
     def test_all_problems_reported_together(self, tmp_path):
         """One missing directory and one rejected name are both in a single error."""
         _touch(tmp_path / "sub" / "x.a3m")

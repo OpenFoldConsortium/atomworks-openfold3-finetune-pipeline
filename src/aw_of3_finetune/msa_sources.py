@@ -111,12 +111,49 @@ def _select_files(value: str, base: Path) -> tuple[list[Path], str | None]:
     return sorted(p for p in directory.rglob("*") if p.is_file()), None
 
 
-def load_msa_sources_manifest(path: Path) -> dict[str, SourceSpec]:
-    """Load a sources manifest.
+def _load_msa_folder(folder: Path) -> dict[str, SourceSpec]:
+    """Use an earlier run's MSA folder as a manifest: its source index lists the sources.
 
     Args:
-        path: YAML or JSON file mapping source name to a directory or glob. Relative
-            values resolve against the manifest's folder.
+        folder: An organized MSA folder (written by generate-msas or import-msas). One
+            without msa_index.yml but with ColabFold's unpaired/ reads as colabfold_main.
+
+    Returns:
+        ``{name: SourceSpec}`` with every file in each source's store.
+
+    Raises:
+        MsaSourcesError: If the folder holds no MSA sources or a listed store is missing.
+    """
+    index = read_msa_index(folder)
+    if not index:
+        raise MsaSourcesError(
+            f"{folder}: no MSA sources found (no {MSA_INDEX_NAME} and no {COLABFOLD_UNPAIRED_DIRNAME}/). "
+            "Pass an MSA folder from an earlier run, or a sources manifest file."
+        )
+    problems = [
+        f"{name}: store {store} listed in {folder / MSA_INDEX_NAME} does not exist"
+        for name, store in index.items() if not store.is_dir()
+    ]
+    if problems:
+        raise MsaSourcesError(f"{folder}:\n  " + "\n  ".join(problems))
+    return {
+        name: SourceSpec(
+            name=name,
+            spec=str(store.relative_to(folder)),
+            files=sorted(p.resolve() for p in store.rglob("*") if p.is_file()),
+        )
+        for name, store in index.items()
+    }
+
+
+def load_msa_sources_manifest(path: Path) -> dict[str, SourceSpec]:
+    """Load a sources manifest, or the source index of an earlier run's MSA folder.
+
+    Args:
+        path: YAML or JSON file mapping source name to a directory or glob (relative
+            values resolve against the manifest's folder), or an organized MSA folder
+            from an earlier run (generate-msas or import-msas), whose sources are read
+            from its msa_index.yml.
 
     Returns:
         ``{name: SourceSpec}`` in manifest order.
@@ -125,6 +162,8 @@ def load_msa_sources_manifest(path: Path) -> dict[str, SourceSpec]:
         MsaSourcesError: Listing every problem (bad names, missing directories, globs
             matching nothing, a manifest that is not a name-to-string mapping).
     """
+    if path.is_dir():
+        return _load_msa_folder(path)
     try:
         content = yaml.safe_load(path.read_text())
     except yaml.YAMLError as exc:

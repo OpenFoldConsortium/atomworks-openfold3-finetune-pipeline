@@ -858,9 +858,10 @@ def generate_msas(
     "--msa-sources",
     "manifest_path",
     required=True,
-    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    type=click.Path(path_type=Path, exists=True),
     help="YAML/JSON file mapping each MSA source name (the OpenFold3 alignment file name, e.g. "
-    "uniref90_hits) to a directory or glob of A3M files. Files are matched to chains by their "
+    "uniref90_hits) to a directory or glob of A3M files, or an MSA folder from an earlier run "
+    "(generate-msas or import-msas) to reuse its MSAs. Files are matched to chains by their "
     "first (query) sequence.",
 )
 @_with_pipeline_logs
@@ -1100,11 +1101,11 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
 @click.option(
     "--msa-sources",
     default=None,
-    type=click.Path(path_type=Path, exists=True, dir_okay=False),
-    help="Use your own MSAs instead of ColabFold: a YAML/JSON file mapping each MSA source name to a "
-    "directory or glob of A3M files (see import-msas). They are imported into --organized-msa-dir "
-    "(default <output-dir>/organized_msas). ColabFold is never contacted, and the template stages "
-    "are skipped.",
+    type=click.Path(path_type=Path, exists=True),
+    help="Use existing MSAs instead of querying ColabFold: a YAML/JSON file mapping each MSA source "
+    "name to a directory or glob of A3M files, or an MSA folder from an earlier run to reuse its "
+    "MSAs (see import-msas). They are imported into --organized-msa-dir (default "
+    "<output-dir>/organized_msas). ColabFold is never contacted, and the template stages are skipped.",
 )
 @click.option(
     "--ccd-path",

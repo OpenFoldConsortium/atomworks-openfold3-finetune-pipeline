@@ -61,6 +61,23 @@ Files whose query matches no chain in the dataset are skipped: they are not chec
 
 `validate-dataset` checks the query row of every MSA, and that `train.yml` reads every source.
 
+## Reuse MSAs from an earlier run
+
+Every MSA folder lists its sources in `msa_index.yml`, so you can pass the folder itself to `--msa-sources` instead of writing a manifest. This works for ColabFold MSAs from `generate-msas`, including folders from before `msa_index.yml` existed, and for MSAs you imported earlier. The new run can use any output directory:
+
+```bash
+pixi run finetune-pipeline \
+  --cif-dir <dir-of-mmcifs> \
+  --output-dir <new-output-dir> \
+  --ccd-path $CCD_PATH \
+  --msa-sources <earlier-output-dir>/organized_msas \
+  --name <dataset-name>
+```
+
+Only the MSAs for chains in the new dataset are copied in, and ColabFold is never contacted. Chains with no MSA in that folder get none; they are counted in a warning.
+
+Templates are not carried over this way yet. To reuse ColabFold MSAs and keep templates, point `--organized-msa-dir` at the earlier folder and add `--skip-existing`, which queries ColabFold only for sequences the folder does not have.
+
 ## Remove a source
 
 Importing adds to what is already there: a source left out of a later manifest stays in training, and `import-msas` warns about it. To remove a source, delete its line from `<organized-msa-dir>/msa_index.yml` and its `<organized-msa-dir>/msa_sources/<source>/` folder, then rerun `import-msas`. `of3_alignments/` is rebuilt from the stores each time, so do not put files there by hand.

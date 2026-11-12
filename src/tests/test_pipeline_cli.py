@@ -1750,3 +1750,20 @@ class TestFinetunePipelineMsaSources:
         result = self._run(cif_dir, tmp_path / "out", ccd_path, "--msa-sources", str(manifest), "--no-templates")
 
         assert result.exit_code == 0, result.output
+
+    def test_msa_sources_folder_recycles_colabfold_msas(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        """--msa-sources <earlier MSA folder> reuses its ColabFold MSAs in a new output directory."""
+        cif_dir, _, seq = self._inputs(cif_protein_monomer, tmp_path)
+        old_msas = tmp_path / "earlier_run" / "organized_msas"
+        _make_unpaired_msa_gz(seq, old_msas)  # no msa_index.yml: a folder from before the index existed
+        output_dir = tmp_path / "new_out"
+
+        result = self._run(cif_dir, output_dir, ccd_path, "--msa-sources", str(old_msas))
+
+        assert result.exit_code == 0, result.output
+        assert "Stage 2/10: import-msas" in result.output
+        assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq) / "colabfold_main.a3m").read_text() == (
+            f">query\n{seq}\n"
+        )
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        assert config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"] == {"moltypes": ["PROTEIN"]}
