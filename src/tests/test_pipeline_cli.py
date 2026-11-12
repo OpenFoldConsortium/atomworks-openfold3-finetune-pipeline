@@ -50,6 +50,7 @@ from aw_of3_finetune.cli import (
     materialize_dataset_cache,
 )
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
+from aw_of3_finetune.msa_sources import MixedMsaDirError
 from aw_of3_finetune.split import split_dataset_cache, split_paths
 from aw_of3_finetune.training_config import StaleSplitError, build_train_config
 from aw_of3_finetune.pipeline import (
@@ -369,11 +370,11 @@ class TestReorganizeMsasForOf3:
         _make_unpaired_msa_gz(seq, tmp_path / "msas")
 
         of3_msa_dir = tmp_path / "msas" / "of3_alignments"
-        written, missing = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
 
         # One MSA was written and none were missing.
-        assert written == 1
-        assert missing == 0
+        assert summary.written == {"colabfold_main": 1}
+        assert summary.missing == 0
 
         # The file holds the query-only MSA as plain text.
         out_file = of3_msa_dir / rep_id / "colabfold_main.a3m"
@@ -389,8 +390,8 @@ class TestReorganizeMsasForOf3:
         _make_unpaired_msa_gz(seq, tmp_path / "msas")
 
         of3_msa_dir = tmp_path / "msas" / "of3_alignments"
-        written, _ = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
-        assert written == 1
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        assert summary.written == {"colabfold_main": 1}
 
         rep_id = alignment_rep_id(seq)
         msas = parse_msas_direct(standardize_filepaths(of3_msa_dir / rep_id))
@@ -404,11 +405,11 @@ class TestReorganizeMsasForOf3:
         output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
         of3_msa_dir = tmp_path / "msas" / "of3_alignments"
 
-        written, missing = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
 
         # Nothing was written; the one chain's MSA is counted as missing.
-        assert written == 0
-        assert missing == 1
+        assert sum(summary.written.values()) == 0
+        assert summary.missing == 1
 
         # No MSA directory content was created.
         assert not of3_msa_dir.exists() or not list(of3_msa_dir.iterdir())
@@ -424,8 +425,83 @@ class TestReorganizeMsasForOf3:
         second = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
 
         # First call writes the one MSA; second call finds it already reorganized and skips it.
-        assert first == (1, 0)
-        assert second == (0, 0)
+        assert (first.written, first.removed, first.missing) == ({"colabfold_main": 1}, 0, 0)
+        assert (second.written, second.removed, second.missing) == ({"colabfold_main": 0}, 0, 0)
+
+    def test_overwrites_changed_store_file(self, cif_protein_monomer, tmp_path):
+        """of3_alignments follows the store: a changed store file is rewritten."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        store_file = _make_unpaired_msa_gz(seq, tmp_path / "msas")
+        of3_msa_dir = tmp_path / "msas" / "of3_alignments"
+        reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        with gzip.open(store_file, "wt") as f:
+            f.write(f">query\n{seq}\n>hit\n{seq}\n")
+
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+
+        assert summary.written == {"colabfold_main": 1}
+        assert (of3_msa_dir / alignment_rep_id(seq) / "colabfold_main.a3m").read_text() == (
+            f">query\n{seq}\n>hit\n{seq}\n"
+        )
+
+    def test_removes_file_without_store(self, cif_protein_monomer, tmp_path):
+        """An .a3m whose source no longer provides that sequence is removed."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        _make_unpaired_msa_gz(seq, tmp_path / "msas")
+        of3_msa_dir = tmp_path / "msas" / "of3_alignments"
+        stray = of3_msa_dir / alignment_rep_id(seq) / "old_source.a3m"
+        stray.parent.mkdir(parents=True)
+        stray.write_text(f">query\n{seq}\n")
+
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+
+        assert not stray.exists()
+        assert summary.removed == 1
+        assert (of3_msa_dir / alignment_rep_id(seq) / "colabfold_main.a3m").exists()
+
+    def test_indexed_store_missing_on_disk_warns(self, cif_protein_monomer, tmp_path, caplog):
+        """A source listed in the index whose store was deleted: warning, and its files removed."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        msa_dir = tmp_path / "msas"
+        msa_dir.mkdir()
+        (msa_dir / "msa_index.yml").write_text("gone: msa_sources/gone\n")
+        old = msa_dir / "of3_alignments" / alignment_rep_id(seq) / "gone.a3m"
+        old.parent.mkdir(parents=True)
+        old.write_text(f">query\n{seq}\n")
+
+        with caplog.at_level("WARNING"):
+            summary = reorganize_msas_for_of3(output_dir, msa_dir, msa_dir / "of3_alignments")
+
+        assert "msa_sources/gone" in caplog.text
+        assert not old.exists()
+        assert summary.removed == 1
+        assert summary.missing == 1
+
+    def test_leaves_non_dataset_rep_ids_alone(self, cif_protein_monomer, tmp_path):
+        """Directories of sequences not in this dataset are not touched."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        _make_unpaired_msa_gz(seq, tmp_path / "msas")
+        other = tmp_path / "msas" / "of3_alignments" / "zzzzzzzzzzz" / "x.a3m"
+        other.parent.mkdir(parents=True)
+        other.write_text(">q\nAAA\n")
+
+        reorganize_msas_for_of3(output_dir, tmp_path / "msas", tmp_path / "msas" / "of3_alignments")
+
+        assert other.exists()
+
+    def test_mixed_index_refused(self, cif_protein_monomer, tmp_path):
+        """A hand-written index mixing ColabFold and user MSAs is refused."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        msa_dir = tmp_path / "msas"
+        msa_dir.mkdir()
+        (msa_dir / "msa_index.yml").write_text("colabfold_main: unpaired\nx: msa_sources/x\n")
+
+        with pytest.raises(MixedMsaDirError):
+            reorganize_msas_for_of3(output_dir, msa_dir, msa_dir / "of3_alignments")
 
     def test_cli_msa_dir_flag_reorganizes(self, cif_protein_monomer, tmp_path):
         """materialize-dataset-cache --msa-dir reorganizes MSAs as a side effect."""

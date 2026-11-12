@@ -10,10 +10,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import yaml
 from atomworks.enums import MSAFileExtension
+from atomworks.io.utils.compression import transfer_with_compression
 from atomworks.io.utils.io_utils import apply_sharding_pattern
 from atomworks.ml.preprocessing.msa.organizing import extract_first_sequence_from_msa
 from atomworks.ml.utils.io import open_file
@@ -21,8 +22,16 @@ from openfold3.core.data.io.sequence.msa import parse_a3m
 from openfold3.core.data.primitives.sequence.msa import process_msa_pairing_metadata
 from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
 
-from aw_of3_finetune.constants import COLABFOLD_UNPAIRED_DIRNAME, MSA_INDEX_NAME, MSA_SOURCES_DIRNAME
-from aw_of3_finetune.msa import alignment_rep_id
+from aw_of3_finetune.constants import (
+    COLABFOLD_UNPAIRED_DIRNAME,
+    MSA_INDEX_NAME,
+    MSA_SOURCES_DIRNAME,
+    OF3_ALIGNMENTS_DIRNAME,
+)
+from aw_of3_finetune.msa import alignment_rep_id, collect_msa_queries
+
+if TYPE_CHECKING:
+    from aw_of3_finetune.pipeline import ReorganizeSummary
 
 # Source names with an OpenFold3-internal or reserved meaning.
 REJECTED_SOURCE_NAMES: frozenset[str] = frozenset({"colabfold_paired", "dummy", "templates"})
@@ -167,13 +176,13 @@ class SourceScan:
     Attributes:
         source: Source name.
         files: A3M files whose query is a dataset sequence.
-        unmatched: A3M files whose query matches no dataset sequence.
+        unmatched: A3M files whose query matches no dataset sequence (imported all the same).
         ignored: Selected files that are not A3M (by extension).
     """
 
     source: str
     files: list[ScannedFile]
-    unmatched: list[Path]
+    unmatched: list[ScannedFile]
     ignored: list[Path]
 
 
@@ -229,7 +238,7 @@ def scan_sources(
     Per A3M file: refuse ColabFold complex A3Ms; hash the query; refuse two files with
     one query in a source; run OpenFold3's A3M parser (and, for sources OpenFold3 pairs
     on, its species-header parser); refuse a file whose store copy exists with other
-    content. Files whose query is not a dataset sequence are listed, not refused.
+    content. Files whose query is not a dataset sequence are listed apart, not refused.
 
     Args:
         manifest: From load_msa_sources_manifest.
@@ -246,7 +255,7 @@ def scan_sources(
     scans: list[SourceScan] = []
     for name, spec in manifest.items():
         files: list[ScannedFile] = []
-        unmatched: list[Path] = []
+        unmatched: list[ScannedFile] = []
         ignored = [p for p in spec.files if not _is_a3m(p)]
         seen: dict[str, Path] = {}
         a3ms = [p for p in spec.files if _is_a3m(p)]
@@ -275,9 +284,6 @@ def scan_sources(
             if (problem := _format_problem(text, name)) is not None:
                 problems.append(f"{name}: {path}: OpenFold3 cannot read it: {problem}")
                 continue
-            if rep_id not in queries:
-                unmatched.append(path)
-                continue
             stored = store_path(store_root, name, rep_id)
             if stored.exists() and read_msa_text(stored) != text:
                 problems.append(
@@ -285,7 +291,8 @@ def scan_sources(
                     f"({stored}); delete {MSA_SOURCES_DIRNAME}/{name}/ to replace it"
                 )
                 continue
-            files.append(ScannedFile(path=path, source=name, rep_id=rep_id))
+            scanned = ScannedFile(path=path, source=name, rep_id=rep_id)
+            (files if rep_id in queries else unmatched).append(scanned)
         scans.append(SourceScan(source=name, files=files, unmatched=unmatched, ignored=ignored))
     if problems:
         raise MsaSourcesError("Problems with the user MSAs:\n  " + "\n  ".join(problems))
@@ -402,3 +409,66 @@ def add_to_msa_index(msa_dir: Path, entries: dict[str, str]) -> None:
     _validated_index(msa_dir, merged, index_path)
     msa_dir.mkdir(parents=True, exist_ok=True)
     index_path.write_text(yaml.safe_dump(dict(sorted(merged.items())), sort_keys=False))
+
+
+@dataclass
+class ImportSummary:
+    """What import_user_msas did.
+
+    Attributes:
+        scans: Per source, which files matched the dataset, which did not, which were ignored.
+        covered: Per source, dataset sequences with an MSA from that source in this import.
+        reorganize: The of3_alignments sync that followed.
+    """
+
+    scans: list[SourceScan]
+    covered: dict[str, int]
+    reorganize: ReorganizeSummary
+
+
+def import_user_msas(output_dir: Path, msa_dir: Path, manifest_path: Path) -> ImportSummary:
+    """Import user MSAs into atomworks-layout stores and sync them into of3_alignments/.
+
+    Steps: refuse a ColabFold MSA folder; load the manifest; check every file
+    (scan_sources) before copying anything; copy each file to
+    ``<msa_dir>/msa_sources/<source>/<shard>/<rep_id>.a3m.gz`` (the layout
+    organize_msas writes); add the sources to the source index; reorganize.
+
+    Args:
+        output_dir: Pipeline output directory; the dataset's sequences come from it.
+        msa_dir: The organized MSA folder.
+        manifest_path: Sources manifest (YAML/JSON).
+
+    Returns:
+        What was imported and what of3_alignments/ now holds.
+
+    Raises:
+        MixedMsaDirError: If msa_dir holds ColabFold MSAs.
+        MsaSourcesError: For any problem with the manifest or files (nothing is copied).
+    """
+    from aw_of3_finetune.pipeline import reorganize_msas_for_of3  # pipeline imports this module
+
+    if msa_dir_kind(msa_dir) == "colabfold":
+        raise MixedMsaDirError(
+            f"{msa_dir} holds ColabFold MSAs ({COLABFOLD_UNPAIRED_DIRNAME}/); one MSA folder holds "
+            "ColabFold or user MSAs, not both. Use a fresh --organized-msa-dir."
+        )
+    manifest = load_msa_sources_manifest(manifest_path)
+    queries = collect_msa_queries(output_dir)
+    store_root = msa_dir / MSA_SOURCES_DIRNAME
+    scans = scan_sources(manifest, queries, store_root)
+
+    for scan in scans:
+        for scanned in [*scan.files, *scan.unmatched]:
+            dest = store_path(store_root, scanned.source, scanned.rep_id)
+            if dest.exists():  # identical content, checked by scan_sources
+                continue
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            transfer_with_compression(scanned.path, dest, move=False)
+    add_to_msa_index(msa_dir, {name: f"{MSA_SOURCES_DIRNAME}/{name}" for name in manifest})
+    reorganize = reorganize_msas_for_of3(output_dir, msa_dir, msa_dir / OF3_ALIGNMENTS_DIRNAME)
+    return ImportSummary(
+        scans=scans,
+        covered={scan.source: len(scan.files) for scan in scans},
+        reorganize=reorganize,
+    )

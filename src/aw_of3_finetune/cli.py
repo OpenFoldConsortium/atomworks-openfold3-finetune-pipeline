@@ -36,6 +36,7 @@ from aw_of3_finetune.msa import (
     collect_complex_queries,
     collect_msa_queries,
 )
+from aw_of3_finetune.msa_sources import MsaSourcesError
 from aw_of3_finetune.prepare_inputs import (
     DEFAULT_RELEASE_DATE,
     PREPARE_DROPPED_FILE,
@@ -49,6 +50,7 @@ from aw_of3_finetune.report.user import ReportError, check_report_dir, write_use
 from aw_of3_finetune.report.validity import ValidityInputs
 from aw_of3_finetune.pipeline import (
     ChainMismatchError,
+    ReorganizeSummary,
     build_manifest,
     check_chain_consistency,
     prepare_augmented_cif,
@@ -218,6 +220,26 @@ def _require_organized_msa_dir(msa_dir: Path | None, output_dir: Path) -> Path:
             "with generate-msas."
         )
     return resolved
+
+
+def _reorganize_message(summary: ReorganizeSummary, of3_msa_dir: Path) -> str:
+    """One line saying what reorganize_msas_for_of3 wrote, removed and could not find.
+
+    Args:
+        summary: Its result.
+        of3_msa_dir: Where it wrote.
+
+    Returns:
+        E.g. "Reorganized 3 MSA(s) for OF3 under X (colabfold_main: 3); 1 sequence(s) missing an MSA".
+    """
+    total = sum(summary.written.values())
+    per_source = ", ".join(f"{name}: {n}" for name, n in summary.written.items())
+    message = f"Reorganized {total} MSA(s) for OF3 under {of3_msa_dir}" + (f" ({per_source})" if per_source else "")
+    if summary.removed:
+        message += f"; removed {summary.removed} stale MSA(s)"
+    if summary.missing:
+        message += f"; {summary.missing} sequence(s) missing an MSA"
+    return message
 
 
 def _check_paired_dirs_writable(
@@ -563,11 +585,11 @@ def materialize_dataset_cache(
     msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=True)
     if msa_dir is not None:
         of3_msa_dir = msa_dir / "of3_alignments"
-        written, missing = reorganize_msas_for_of3(output_dir, msa_dir, of3_msa_dir)
-        click.echo(
-            f"Reorganized {written} MSA(s) for OF3 under {of3_msa_dir}"
-            + (f" ({missing} sequence(s) missing an MSA)" if missing else "")
-        )
+        try:
+            summary = reorganize_msas_for_of3(output_dir, msa_dir, of3_msa_dir)
+        except MsaSourcesError as error:
+            raise click.ClickException(str(error)) from error
+        click.echo(_reorganize_message(summary, of3_msa_dir))
 
 
 @click.command()

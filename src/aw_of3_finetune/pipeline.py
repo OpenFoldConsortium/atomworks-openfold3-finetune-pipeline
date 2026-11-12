@@ -10,6 +10,7 @@ import gzip
 import json
 import logging
 import shutil
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -45,9 +46,10 @@ from openfold3.core.data.resources.residues import MoleculeType
 from aw_of3_finetune.augmented_cif import read_augmented_cif, write_augmented_cif
 from aw_of3_finetune.cif_reader import parse_cif_chain_data
 from aw_of3_finetune.cleanup import CleanupSettings, clean_structure
-from aw_of3_finetune.constants import DUMMY_CLUSTER_ID
+from aw_of3_finetune.constants import DUMMY_CLUSTER_ID, MSA_INDEX_NAME
 from aw_of3_finetune.ligand_names import SignaturesByName, record_ligand_signatures
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences, collect_msa_queries
+from aw_of3_finetune.msa_sources import STORE_EXTENSION, read_msa_index, read_msa_text
 from aw_of3_finetune.parsing import parse_structure
 from aw_of3_finetune.steplog import StepRecorder, read_input_atoms
 from aw_of3_finetune.templates import find_template_ids
@@ -597,43 +599,83 @@ def build_manifest(
     return cache
 
 
-def reorganize_msas_for_of3(output_dir: Path, msa_dir: Path, of3_msa_dir: Path) -> tuple[int, int]:
-    """Copy atomworks' unpaired MSAs into OF3's directory-per-rep_id layout.
+@dataclass
+class ReorganizeSummary:
+    """What reorganize_msas_for_of3 changed.
 
-    OF3's alignments_directory can't read gzip or hash-sharded dirs. Paired MSAs are skipped: OF3 has no paired-MSA loading. Safe to rerun.
+    Attributes:
+        written: Per source, ``.a3m`` files written or rewritten this run.
+        removed: ``.a3m`` files removed because their source no longer has that sequence.
+        missing: Dataset sequences with no MSA from any source.
+    """
+
+    written: dict[str, int]
+    removed: int
+    missing: int
+
+
+def reorganize_msas_for_of3(output_dir: Path, msa_dir: Path, of3_msa_dir: Path) -> ReorganizeSummary:
+    """Sync every indexed MSA store into OF3's directory-per-rep_id layout.
+
+    OF3's alignments_directory can't read gzip or hash-sharded dirs. The sources come
+    from the MSA folder's source index (``msa_index.yml``; ColabFold's ``unpaired/`` is
+    source ``colabfold_main``). For each dataset sequence, ``{of3_msa_dir}/{rep_id}/``
+    ends up holding exactly one ``<source>.a3m`` per source that has its MSA: missing
+    files are written, changed ones rewritten, ones whose source no longer has the
+    sequence removed. Directories of sequences outside the dataset are left alone. Safe
+    to rerun.
 
     Args:
         output_dir: Pipeline output directory; the dataset's sequences come from it.
-        msa_dir: MSA directory written by generate-msas
-            (``unpaired/<shard>/<hash>.a3m.gz``).
-        of3_msa_dir: Destination; writes ``{of3_msa_dir}/{rep_id}/colabfold_main.a3m``.
+        msa_dir: The organized MSA folder.
+        of3_msa_dir: Destination, ``{of3_msa_dir}/{rep_id}/{source}.a3m``.
 
     Returns:
-        ``(written, missing)``: MSAs written this run, and sequences with no unpaired
-        MSA under msa_dir at all.
+        Counts of what changed and of sequences with no MSA.
+
+    Raises:
+        MsaSourcesError: If the source index is malformed or mixes ColabFold and user MSAs.
     """
+    index = read_msa_index(msa_dir)
+    written = {name: 0 for name in index}
     queries = collect_msa_queries(output_dir)  # rep_id -> sequence
     if not queries:
-        return 0, 0
+        return ReorganizeSummary(written=written, removed=0, missing=0)
 
-    lookup_dir = {"dir": str(msa_dir / "unpaired"), "extension": ".a3m.gz", "directory_depth": 1}
     seqs = list(queries.values())
-    missing, found = find_msas(seqs, [lookup_dir])
+    found_by_source: dict[str, dict[str, Path]] = {}
+    for name, store in index.items():
+        if not store.is_dir():
+            logger.warning(
+                "MSA source %s: its store %s (listed in %s) does not exist; it provides no MSAs",
+                name, store, msa_dir / MSA_INDEX_NAME,
+            )
+            found_by_source[name] = {}
+            continue
+        lookup = {"dir": str(store), "extension": STORE_EXTENSION, "directory_depth": 1}
+        found_by_source[name] = find_msas(seqs, [lookup])[1]
 
-    written = 0
+    removed = missing = 0
     for rep_id, seq in queries.items():
-        src = found.get(seq)
-        if src is None:
-            continue
-        dest = of3_msa_dir / rep_id / "colabfold_main.a3m"
-        if dest.exists():
-            continue
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with gzip.open(src, "rt") as f:  # OF3 has no gzip support; write plain text
-            dest.write_text(f.read())
-        written += 1
+        rep_dir = of3_msa_dir / rep_id
+        provided = {name: found[seq] for name, found in found_by_source.items() if seq in found}
+        if not provided:
+            missing += 1
+        for name, src in provided.items():
+            text = read_msa_text(src)  # OF3 has no gzip support; write plain text
+            dest = rep_dir / f"{name}.a3m"
+            if dest.exists() and dest.read_text() == text:
+                continue
+            rep_dir.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text)
+            written[name] += 1
+        if rep_dir.is_dir():
+            for stale in rep_dir.glob("*.a3m"):
+                if stale.stem not in provided:
+                    stale.unlink()
+                    removed += 1
 
-    return written, len(missing)
+    return ReorganizeSummary(written=written, removed=removed, missing=missing)
 
 
 class NotAugmentedCifError(ValueError):

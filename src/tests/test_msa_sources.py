@@ -5,6 +5,7 @@ Test structure
 TestLoadManifest    sources manifest (YAML/JSON): directories, globs, source-name rules.
 TestScanSources     per-file checks before import: query match, duplicates, OF3 format.
 TestMsaIndex        msa_index.yml: source name -> store folder, legacy folders, no mixing.
+TestImportUserMsas  import_user_msas: stores, index, of3_alignments, reruns.
 """
 
 from __future__ import annotations
@@ -15,13 +16,19 @@ from pathlib import Path
 
 import pytest
 import yaml
+from atomworks.ml.preprocessing.msa.finding import find_msas
+from atomworks.ml.preprocessing.msa.organizing import MSAOrganizationConfig, organize_msas
+from click.testing import CliRunner
 
-from aw_of3_finetune.msa import alignment_rep_id
+from aw_of3_finetune.cli import finetune_prep
+
+from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.msa_sources import (
     MixedMsaDirError,
     MsaSourcesError,
     SourceSpec,
     add_to_msa_index,
+    import_user_msas,
     load_msa_sources_manifest,
     msa_dir_kind,
     read_msa_index,
@@ -193,7 +200,7 @@ class TestScanSources:
 
         scan = scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), tmp_path / "store")
 
-        assert scan[0].unmatched == [f]
+        assert [u.path for u in scan[0].unmatched] == [f]
 
     def test_query_with_insertions_is_unmatched(self, tmp_path):
         """A query row with lowercase or gaps does not hash to the chain: reported unmatched by filename."""
@@ -202,7 +209,7 @@ class TestScanSources:
 
         scan = scan_sources({"s": _spec("s", lower, gapped)}, _queries(SEQ_A), tmp_path / "store")
 
-        assert sorted(scan[0].unmatched) == sorted([lower, gapped])
+        assert sorted(u.path for u in scan[0].unmatched) == sorted([lower, gapped])
         assert scan[0].files == []
 
     def test_duplicate_in_source_errors(self, tmp_path):
@@ -412,3 +419,130 @@ class TestMsaIndex:
             add_to_msa_index(msa_dir, {"x": "msa_sources/x"})
 
         assert index.read_text() == before
+
+
+def _dataset(cif_path: Path, tmp_path: Path) -> tuple[Path, str]:
+    """A finetune-prep output directory for one CIF, and its protein chain's sequence."""
+    cif_dir = tmp_path / "input"
+    cif_dir.mkdir()
+    (cif_dir / "3u8v.cif").symlink_to(cif_path.resolve())
+    output_dir = tmp_path / "out"
+    result = CliRunner().invoke(
+        finetune_prep, ["--cif-dir", str(cif_dir), "--output-dir", str(output_dir)], catch_exceptions=False
+    )
+    assert result.exit_code == 0, result.output
+    return output_dir, chain_canonical_sequences(cif_path)["A"]
+
+
+class TestImportUserMsas:
+    def test_store_layout_matches_organize_msas(self, cif_protein_monomer, tmp_path):
+        """An imported file lands where atomworks' organize_msas would put it."""
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        src = _touch(tmp_path / "user" / "chain_a.a3m", _a3m(seq))
+        manifest = _write_manifest(tmp_path / "m.yml", {"my_lab_db": "user"})
+        msa_dir = tmp_path / "msas"
+
+        import_user_msas(output_dir, msa_dir, manifest)
+        organize_msas(tmp_path / "user", tmp_path / "aw", MSAOrganizationConfig(
+            input_extension=".a3m", output_extension=".a3m.gz", sharding_pattern="/0:2/",
+        ))
+
+        ours = {p.relative_to(msa_dir / "msa_sources" / "my_lab_db") for p in (msa_dir / "msa_sources" / "my_lab_db").rglob("*.a3m.gz")}
+        theirs = {p.relative_to(tmp_path / "aw") for p in (tmp_path / "aw").rglob("*.a3m.gz")}
+        assert ours == theirs != set()
+        assert src.exists()  # copied, not moved
+
+    def test_import_writes_store_and_of3_alignments(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        text = _a3m(seq, [("hit", seq)])
+        _touch(tmp_path / "user" / "a.a3m", text)
+        msa_dir = tmp_path / "msas"
+
+        import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"my_lab_db": "user"}))
+
+        missing, _ = find_msas(
+            [seq], [{"dir": str(msa_dir / "msa_sources" / "my_lab_db"), "extension": ".a3m.gz", "directory_depth": 1}]
+        )
+        assert missing == []
+        assert (msa_dir / "of3_alignments" / alignment_rep_id(seq) / "my_lab_db.a3m").read_text() == text
+
+    def test_two_sources_two_files(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "a" / "x.a3m", _a3m(seq))
+        _touch(tmp_path / "b" / "x.a3m", _a3m(seq, [("hit", seq)]))
+        msa_dir = tmp_path / "msas"
+
+        summary = import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"src_a": "a", "src_b": "b"}))
+
+        rep_dir = msa_dir / "of3_alignments" / alignment_rep_id(seq)
+        assert sorted(p.name for p in rep_dir.iterdir()) == ["src_a.a3m", "src_b.a3m"]
+        assert summary.covered == {"src_a": 1, "src_b": 1}
+        assert summary.reorganize.written == {"src_a": 1, "src_b": 1}
+
+    def test_index_written_and_merged(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "a" / "x.a3m", _a3m(seq))
+        _touch(tmp_path / "b" / "x.a3m", _a3m(seq))
+        msa_dir = tmp_path / "msas"
+
+        import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m1.yml", {"a": "a"}))
+        assert yaml.safe_load((msa_dir / "msa_index.yml").read_text()) == {"a": "msa_sources/a"}
+        import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m2.yml", {"b": "b"}))
+
+        assert yaml.safe_load((msa_dir / "msa_index.yml").read_text()) == {"a": "msa_sources/a", "b": "msa_sources/b"}
+        assert sorted(p.name for p in msa_dir.iterdir()) == ["msa_index.yml", "msa_sources", "of3_alignments"]
+
+    @pytest.mark.parametrize("with_index", [True, False])
+    def test_import_refuses_colabfold_dir(self, cif_protein_monomer, tmp_path, with_index):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "a" / "x.a3m", _a3m(seq))
+        msa_dir = tmp_path / "msas"
+        (msa_dir / "unpaired").mkdir(parents=True)
+        if with_index:
+            _write_index(msa_dir, {"colabfold_main": "unpaired"})
+
+        with pytest.raises(MixedMsaDirError, match="unpaired"):
+            import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"a": "a"}))
+
+        assert not (msa_dir / "msa_sources").exists()
+
+    def test_failed_scan_copies_nothing(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "a" / "good.a3m", _a3m(seq))
+        _touch(tmp_path / "a" / "bad.a3m", _a3m(seq[:-1] + "W", [("h", seq + "K")]))
+        msa_dir = tmp_path / "msas"
+
+        with pytest.raises(MsaSourcesError, match="bad.a3m"):
+            import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"a": "a"}))
+
+        assert not (msa_dir / "msa_sources").exists()
+        assert not (msa_dir / "msa_index.yml").exists()
+
+    def test_reimport_same_manifest_is_noop(self, cif_protein_monomer, tmp_path):
+        """Importing the same manifest again rewrites nothing."""
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "a" / "x.a3m", _a3m(seq))
+        manifest = _write_manifest(tmp_path / "m.yml", {"a": "a"})
+        msa_dir = tmp_path / "msas"
+        import_user_msas(output_dir, msa_dir, manifest)
+        files = sorted(p for p in msa_dir.rglob("*") if p.is_file() and p.name != "msa_index.yml")
+        mtimes = {p: p.stat().st_mtime_ns for p in files}
+
+        summary = import_user_msas(output_dir, msa_dir, manifest)
+
+        assert {p: p.stat().st_mtime_ns for p in files} == mtimes
+        assert summary.reorganize.written == {"a": 0}
+
+    def test_all_unmatched_warns_not_errors(self, cif_protein_monomer, tmp_path):
+        """A manifest whose files match no dataset chain imports, and says nothing is covered."""
+        output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
+        other = _touch(tmp_path / "src" / "other.a3m", _a3m(SEQ_B))
+        msa_dir = tmp_path / "msas"
+
+        summary = import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"src": "src"}))
+
+        assert summary.covered == {"src": 0}
+        assert [u.path for u in summary.scans[0].unmatched] == [other]
+        assert summary.reorganize.missing == 1
+        # Still imported: the store is keyed by sequence, so a later dataset with this chain finds it.
+        assert (msa_dir / "msa_sources" / "src" / alignment_rep_id(SEQ_B)[:2] / f"{alignment_rep_id(SEQ_B)}.a3m.gz").exists()
