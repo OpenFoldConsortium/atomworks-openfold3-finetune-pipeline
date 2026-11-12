@@ -158,6 +158,8 @@ start = (end[0] - dx * length, end[1] - dy * length)
 arrow(*start, *end, width=2.5, head=12)
 
 # Output: what OpenFold3 reads, under Check, fed by Hand off
+# TODO: when templates work with --msa-sources (user-provided template hits), add the template
+# outputs to this list, and show in 2. Search that import-msas can be followed by templates too.
 out_y = r2 + check_h + 70
 out_h = stack(COL_X[1], out_y, GROUP_W - 16, "Output: ready for OpenFold3",
               ["train.yml", "dataset_cache.json", "of3_compressed_structures/", "organized_msas/"])
