@@ -66,6 +66,10 @@ Files whose query matches no chain in the dataset are listed as a warning, usual
 
 `validate-dataset` checks the query row of every MSA, and that `train.yml` reads every source.
 
+## Remove a source
+
+Importing adds to what is already there: a source left out of a later manifest stays in training, and `import-msas` warns about it. To remove a source, delete its line from `<organized-msa-dir>/msa_index.yml` and its `<organized-msa-dir>/msa_sources/<source>/` folder, then rerun `import-msas`. `of3_alignments/` is rebuilt from the stores each time, so do not put files there by hand.
+
 ## One kind of MSA per folder
 
 An MSA folder holds either ColabFold's MSAs or your own, not both. `import-msas` refuses a folder `generate-msas` wrote, and the other way round. Use a separate `--organized-msa-dir` for each.

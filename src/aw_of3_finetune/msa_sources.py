@@ -16,7 +16,6 @@ import yaml
 from atomworks.enums import MSAFileExtension
 from atomworks.io.utils.compression import transfer_with_compression
 from atomworks.io.utils.io_utils import apply_sharding_pattern
-from atomworks.ml.preprocessing.msa.organizing import extract_first_sequence_from_msa
 from atomworks.ml.utils.io import open_file
 from openfold3.core.data.io.sequence.msa import parse_a3m
 from openfold3.core.data.primitives.sequence.msa import process_msa_pairing_metadata
@@ -207,6 +206,36 @@ def read_msa_text(path: Path) -> str:
         return f.read()
 
 
+def query_sequence(text: str) -> str:
+    """The first (query) sequence of A3M/FASTA text, joining wrapped lines as OpenFold3 does.
+
+    atomworks' extract_first_sequence_from_msa reads only the first line, which drops
+    the rest of a wrapped query.
+
+    Args:
+        text: A3M text.
+
+    Returns:
+        The query sequence.
+
+    Raises:
+        ValueError: If the text has no sequence after a header.
+    """
+    lines: list[str] = []
+    started = False
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith(">"):
+            if started and lines:
+                break
+            started = True
+        elif started and line:
+            lines.append(line)
+    if not lines:
+        raise ValueError("no sequence found")
+    return "".join(lines)
+
+
 def _is_a3m(path: Path) -> bool:
     return path.name.endswith(A3M_EXTENSIONS)
 
@@ -273,7 +302,7 @@ def scan_sources(
                 )
                 continue
             try:
-                rep_id = alignment_rep_id(extract_first_sequence_from_msa(path))
+                rep_id = alignment_rep_id(query_sequence(text))
             except ValueError as exc:
                 problems.append(f"{name}: {path}: {exc}")
                 continue
@@ -419,11 +448,14 @@ class ImportSummary:
         scans: Per source, which files matched the dataset, which did not, which were ignored.
         covered: Per source, dataset sequences with an MSA from that source in this import.
         reorganize: The of3_alignments sync that followed.
+        other_sources: Sources in the index from earlier imports, not in this manifest;
+            they stay in of3_alignments/ and train.yml.
     """
 
     scans: list[SourceScan]
     covered: dict[str, int]
     reorganize: ReorganizeSummary
+    other_sources: list[str]
 
 
 def import_user_msas(output_dir: Path, msa_dir: Path, manifest_path: Path) -> ImportSummary:
@@ -471,4 +503,5 @@ def import_user_msas(output_dir: Path, msa_dir: Path, manifest_path: Path) -> Im
         scans=scans,
         covered={scan.source: len(scan.files) for scan in scans},
         reorganize=reorganize,
+        other_sources=[name for name in read_msa_index(msa_dir) if name not in manifest],
     )

@@ -224,6 +224,24 @@ class TestScanSources:
         assert sorted(u.path for u in scan[0].unmatched) == sorted([lower, gapped])
         assert scan[0].files == []
 
+    def test_wrapped_query_is_matched(self, tmp_path):
+        """A query wrapped over several lines (valid for OpenFold3) matches its chain."""
+        wrapped = "\n".join(SEQ_A[i:i + 8] for i in range(0, len(SEQ_A), 8))
+        f = _touch(tmp_path / "wrapped.a3m", f">query\n{wrapped}\n>hit\n{SEQ_A}\n")
+
+        scan = scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert [x.rep_id for x in scan[0].files] == [alignment_rep_id(SEQ_A)]
+
+    def test_wrapped_queries_differing_after_first_line_are_not_duplicates(self, tmp_path):
+        one = _touch(tmp_path / "one.a3m", f">query\n{SEQ_A[:8]}\n{SEQ_A[8:]}\n")
+        two = _touch(tmp_path / "two.a3m", f">query\n{SEQ_A[:8]}\n{SEQ_B}\n")
+
+        scan = scan_sources({"s": _spec("s", one, two)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert [x.path for x in scan[0].files] == [one]
+        assert [x.path for x in scan[0].unmatched] == [two]
+
     def test_duplicate_in_source_errors(self, tmp_path):
         one = _touch(tmp_path / "one.a3m", _a3m(SEQ_A))
         two = _touch(tmp_path / "two.a3m", _a3m(SEQ_A, [("h", SEQ_A)]))
@@ -598,6 +616,40 @@ class TestImportMsasCli:
         assert result.exit_code == 1
         assert "ragged.a3m" in result.output
         assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+    def test_cli_warns_about_indexed_sources_missing_from_manifest(self, cif_protein_monomer, tmp_path):
+        """A source imported earlier but left out of this manifest stays in training: say so, and how to remove it."""
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "a" / "x.a3m", _a3m(seq))
+        _touch(tmp_path / "b" / "x.a3m", _a3m(seq))
+        args = ["--output-dir", str(output_dir), "--msa-sources"]
+        CliRunner().invoke(import_msas, [*args, str(_write_manifest(tmp_path / "m1.yml", {"old_db": "a"}))], catch_exceptions=False)
+
+        result = CliRunner().invoke(
+            import_msas, [*args, str(_write_manifest(tmp_path / "m2.yml", {"new_db": "b"}))], catch_exceptions=False
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "old_db" in result.stderr
+        assert "msa_index.yml" in result.stderr
+
+    def test_cli_caps_unmatched_listing(self, cif_protein_monomer, tmp_path):
+        """A large library of unrelated MSAs gives a count and a short sample, not one line per file."""
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "lib" / "match.a3m", _a3m(seq))
+        for i in range(30):
+            _touch(tmp_path / "lib" / f"other_{i:02d}.a3m", _a3m(SEQ_B + "A" * (i + 1)))
+        manifest = _write_manifest(tmp_path / "m.yml", {"lib": "lib"})
+
+        result = CliRunner().invoke(
+            import_msas, ["--output-dir", str(output_dir), "--msa-sources", str(manifest)], catch_exceptions=False
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "30 file(s) match no sequence" in result.stderr
+        assert result.stderr.count("other_") == 20
+        assert "and 10 more" in result.stderr
 
 
 class TestGenerateMsasIndex:

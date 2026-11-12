@@ -147,6 +147,10 @@ cleanup_config_option = click.option(
 )
 
 
+# import-msas lists at most this many unmatched files per source.
+UNMATCHED_LISTING_CAP = 20
+
+
 def organized_msa_dir_option(*, exists: bool, help: str) -> Callable[[Callable], Callable]:
     """Add --organized-msa-dir (parameter ``msa_dir``) plus the hidden, deprecated --msa-dir alias.
 
@@ -878,16 +882,26 @@ def import_msas(output_dir: Path, msa_dir: Path | None, manifest_path: Path) -> 
             f"covers {summary.covered[scan.source]} dataset sequence(s)"
         )
         if scan.unmatched:
-            listing = "\n    ".join(str(u.path) for u in scan.unmatched)
+            shown = [str(u.path) for u in scan.unmatched[:UNMATCHED_LISTING_CAP]]
+            more = len(scan.unmatched) - len(shown)
+            listing = "\n    ".join(shown + ([f"... and {more} more"] if more else []))
             click.echo(
                 f"  WARNING: {scan.source}: {len(scan.unmatched)} file(s) match no sequence in this "
-                f"dataset (imported all the same):\n    {listing}",
+                f"dataset (imported all the same). Usually the query row is not the chain's SEQRES "
+                f"sequence:\n    {listing}",
                 err=True,
             )
         if scan.ignored:
             listing = "\n    ".join(str(p) for p in scan.ignored)
             click.echo(f"  {scan.source}: ignored {len(scan.ignored)} non-A3M file(s):\n    {listing}", err=True)
     click.echo(_reorganize_message(summary.reorganize, msa_dir / "of3_alignments"))
+    if summary.other_sources:
+        click.echo(
+            f"WARNING: {msa_dir / 'msa_index.yml'} also lists {', '.join(summary.other_sources)} from an "
+            "earlier import; they stay in training. To remove one, delete its line from msa_index.yml "
+            "and its msa_sources/<source>/ folder, then rerun import-msas.",
+            err=True,
+        )
     if summary.reorganize.missing:
         click.echo(
             f"WARNING: {summary.reorganize.missing} sequence(s) have no MSA from any source",
