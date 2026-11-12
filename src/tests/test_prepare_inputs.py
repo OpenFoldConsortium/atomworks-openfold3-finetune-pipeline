@@ -25,6 +25,7 @@ from aw_of3_finetune.prepare_inputs import (
     prepare_structure,
 )
 from aw_of3_finetune.validate import run_validation
+from aw_of3_finetune.validate.check_ids import ATOMS_MATCH_SOURCE, DATASET_LOADS, RESIDUE_NUMBERING
 from ligand_helpers import (
     ACID_ATOM_NAMES,
     ACID_SMILES,
@@ -543,7 +544,7 @@ def test_prepared_pdb_loads_through_of3(tmp_path, namer, ccd, ccd_path):
     source.write_text(prepared.cif_text)
 
     built = build_dataset(tmp_path / "built", [source], ccd_path)
-    report = run_validation(context(built), ["V3", "V7", "V21"])
+    report = run_validation(context(built), [ATOMS_MATCH_SOURCE, RESIDUE_NUMBERING, DATASET_LOADS])
 
     actual_errors = [f"{f.check}: {f.message}" for f in report.errors]
     assert actual_errors == []

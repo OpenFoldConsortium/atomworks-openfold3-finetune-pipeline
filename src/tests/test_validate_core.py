@@ -7,6 +7,15 @@ from pathlib import Path
 import pytest
 
 from aw_of3_finetune.validate import CHECK_TITLES, CHECKS, run_validation
+from aw_of3_finetune.validate.check_ids import (
+    ATOMS_MATCH_SOURCE,
+    DATASET_CACHE_READABLE,
+    FINITE_COORDINATES,
+    MSA_QUERY_ROWS,
+    REFERENCE_SDFS_EXIST,
+    SDF_ATOM_NAMES_MATCH,
+    SDF_ELEMENTS_MATCH,
+)
 from aw_of3_finetune.validate.context import ValidationContext
 from aw_of3_finetune.validate.findings import Finding, Severity, ValidationReport
 from validate_helpers import context, mutable_copy
@@ -16,8 +25,8 @@ def _report() -> ValidationReport:
     """Two findings: an error on 1abc (V3) and a warning on 2xyz (V5)."""
     return ValidationReport(
         findings=[
-            Finding("V3", Severity.ERROR, "1abc", "bad", {"k": 1}),
-            Finding("V5", Severity.WARNING, "2xyz", "meh"),
+            Finding(ATOMS_MATCH_SOURCE, Severity.ERROR, "1abc", "bad", {"k": 1}),
+            Finding(FINITE_COORDINATES, Severity.WARNING, "2xyz", "meh"),
         ],
         entries_in=["1abc", "2xyz"],
     )
@@ -133,13 +142,13 @@ def test_run_without_msa_dir_skips_msa_checks(built_dataset):
     report = run_validation(ctx)
 
     # No findings from the MSA content checks.
-    msa_check_findings = [f for f in report.findings if f.check in {"V8", "V9", "V10"}]
+    msa_check_findings = [f for f in report.findings if f.check in {REFERENCE_SDFS_EXIST, SDF_ELEMENTS_MATCH, SDF_ATOM_NAMES_MATCH}]
     assert msa_check_findings == []
 
     # V13 emits a single INFO finding explaining the missing MSA dir.
-    msa_check_findings = [f for f in report.findings if f.check == "V13"]
-    assert [f.severity for f in msa_check_findings] == [Severity.INFO]
-    assert "no --organized-msa-dir" in msa_check_findings[0].message
+    msa_query_row_findings = [f for f in report.findings if f.check == MSA_QUERY_ROWS]
+    assert [f.severity for f in msa_query_row_findings] == [Severity.INFO]
+    assert "no --organized-msa-dir" in msa_query_row_findings[0].message
 
 
 def test_unknown_check_id_raises(built_dataset):
@@ -159,7 +168,7 @@ def test_unreadable_cache_is_an_error(built_dataset, tmp_path):
     assert report.entries_in == []
 
     # The only finding is the V0 "cache unreadable" error.
-    assert [f.check for f in report.errors] == ["V0"]
+    assert [f.check for f in report.errors] == [DATASET_CACHE_READABLE]
     assert "dataset cache unreadable" in report.errors[0].message
 
 
@@ -169,9 +178,9 @@ def test_crashed_check_message_includes_exception_type(built_dataset, monkeypatc
     def boom(ctx):
         raise RuntimeError("boom")
 
-    monkeypatch.setitem(CHECKS, "V5", boom)
+    monkeypatch.setitem(CHECKS, FINITE_COORDINATES, boom)
 
-    report = run_validation(context(built_dataset), ["V5"])
+    report = run_validation(context(built_dataset), [FINITE_COORDINATES])
 
     assert report.errors[0].message == "check crashed: RuntimeError: boom"
 

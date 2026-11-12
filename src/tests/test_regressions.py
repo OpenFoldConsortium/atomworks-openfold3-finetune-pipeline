@@ -7,6 +7,7 @@ from aw_of3_finetune.cif_reader import parse_cif_chain_data
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences, collect_msa_queries
 from aw_of3_finetune.pipeline import prepare_augmented_cif
 from aw_of3_finetune.validate import run_validation
+from aw_of3_finetune.validate.check_ids import CHAINS_ACCOUNTED, MSA_QUERY_ROWS, SDF_ATOM_NAMES_MATCH
 from aw_of3_finetune.validate.findings import Severity
 from conftest import FIXTURES_MMCIFS
 from validate_helpers import context
@@ -30,7 +31,7 @@ def test_metal_kept_aid_stripped(built_dataset):
     assert "NI" in names["3u8v"]
     assert "EPE" not in names["2q2k"]
 
-    report = run_validation(context(built_dataset), ["V1"])
+    report = run_validation(context(built_dataset), [CHAINS_ACCOUNTED])
 
     # V1 records exactly one INFO crystallization-aid removal for 2q2k.
     aid_findings = [
@@ -67,14 +68,14 @@ def test_homomer_copies_distinct_chains_shared_rep(built_dataset):
 
 def test_msa_query_row_matches_sequence(built_dataset):
     """V13 finds no error on the built dataset."""
-    report = run_validation(context(built_dataset), ["V13"])
+    report = run_validation(context(built_dataset), [MSA_QUERY_ROWS])
 
     assert report.errors == []
 
 
 def test_crystal_atom_names_subset_of_sdf(built_dataset):
     """V10 (crystal heavy-atom names are a subset of the SDF's) finds no error."""
-    report = run_validation(context(built_dataset), ["V10"])
+    report = run_validation(context(built_dataset), [SDF_ATOM_NAMES_MATCH])
 
     assert report.errors == []
 

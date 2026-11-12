@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 from aw_of3_finetune.cli import finetune_pipeline, finetune_prep
 from aw_of3_finetune.validate import run_validation
+from aw_of3_finetune.validate.check_ids import ONE_CHEMISTRY_PER_MOL_ID
 from conftest import FIXTURES_MMCIFS
 from test_validate_ligands import _duplicate_entry, _p06_rows, _rewrite_npz
 from validate_helpers import context, mutable_copy
@@ -184,19 +185,19 @@ def _built_with_fragment(built_dataset, tmp_path):
     return built
 
 
-def test_v11_rejects_a_fragment_under_a_non_ccd_name(built_dataset, tmp_path, ccd_path):
+def test_one_chemistry_check_rejects_a_fragment_under_a_non_ccd_name(built_dataset, tmp_path, ccd_path):
     built = _built_with_fragment(built_dataset, tmp_path)
 
-    report = run_validation(context(built, ccd_path=ccd_path), ["V11"])
+    report = run_validation(context(built, ccd_path=ccd_path), [ONE_CHEMISTRY_PER_MOL_ID])
 
     expected_entries = {"7riv", "7riw"}
     assert report.failing_entries == expected_entries
     assert NON_CCD_NAME in report.errors[0].message
 
 
-def test_v11_keeps_the_tolerant_compare_without_a_ccd(built_dataset, tmp_path):
+def test_one_chemistry_check_keeps_the_tolerant_compare_without_a_ccd(built_dataset, tmp_path):
     built = _built_with_fragment(built_dataset, tmp_path)
 
-    report = run_validation(context(built), ["V11"])
+    report = run_validation(context(built), [ONE_CHEMISTRY_PER_MOL_ID])
 
     assert report.errors == []

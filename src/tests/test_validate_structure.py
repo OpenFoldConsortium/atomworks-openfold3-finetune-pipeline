@@ -1,4 +1,7 @@
-"""Tests for the structure checks V1-V3 and V5-V7."""
+"""Tests for the structure checks.
+
+Chains (V1), sequences (V2), atoms (V3), coordinates (V5), cache metadata (V6), numbering (V7).
+"""
 
 import json
 
@@ -6,10 +9,25 @@ import numpy as np
 from biotite.structure.io.pdbx import CIFCategory, CIFColumn, CIFFile
 
 from aw_of3_finetune.validate import CHECKS, run_validation
+from aw_of3_finetune.validate.check_ids import (
+    ATOMS_MATCH_SOURCE,
+    CACHE_MATCHES_STRUCTURE,
+    CHAINS_ACCOUNTED,
+    FINITE_COORDINATES,
+    POLYMER_SEQUENCES,
+    RESIDUE_NUMBERING,
+)
 from aw_of3_finetune.validate.findings import Severity
 from validate_helpers import context, mutable_copy
 
-STRUCTURE_CHECKS = ["V1", "V2", "V3", "V5", "V6", "V7"]
+STRUCTURE_CHECKS = [
+    CHAINS_ACCOUNTED,
+    POLYMER_SEQUENCES,
+    ATOMS_MATCH_SOURCE,
+    FINITE_COORDINATES,
+    CACHE_MATCHES_STRUCTURE,
+    RESIDUE_NUMBERING,
+]
 
 
 def _rewrite_npz(built, entry, edit):
@@ -40,12 +58,12 @@ def test_structure_checks_pass_on_clean_build(built_dataset):
     assert report.errors == [], [f.message for f in report.errors]
 
     # 2q2k lost its HEPES to cleanup, which V1 records as INFO.
-    v1_findings = [f for f in report.findings if f.check == "V1" and f.entry == "2q2k"]
-    actual_v1 = [(f.severity, f.detail["reason"]) for f in v1_findings]
+    dropped_chain_findings = [f for f in report.findings if f.check == CHAINS_ACCOUNTED and f.entry == "2q2k"]
+    actual_v1 = [(f.severity, f.detail["reason"]) for f in dropped_chain_findings]
     assert actual_v1 == [(Severity.INFO, "crystallization_aid")]
 
 
-def test_v2_detects_sequence_change(built_dataset, tmp_path):
+def test_polymer_sequence_change_is_an_error(built_dataset, tmp_path):
     """V2 flags an entry whose cleaned CIF has a different sequence than the source."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     path = built.output_dir / "cleaned_structures" / "3u8v.cif"
@@ -55,12 +73,12 @@ def test_v2_detects_sequence_change(built_dataset, tmp_path):
     # Mutate one residue in the cleaned CIF (S -> A).
     path.write_text(text.replace("SGHTAHV", "AGHTAHV"))
 
-    report = run_validation(context(built), ["V2"])
+    report = run_validation(context(built), [POLYMER_SEQUENCES])
 
     assert report.failing_entries == {"3u8v"}
 
 
-def test_v3_detects_moved_atom(built_dataset, tmp_path):
+def test_moved_atom_is_an_error(built_dataset, tmp_path):
     """V3 flags an atom moved by 0.01 A in the NPZ and reports which atom."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -69,29 +87,29 @@ def test_v3_detects_moved_atom(built_dataset, tmp_path):
 
     _rewrite_npz(built, "3u8v", move)
 
-    report = run_validation(context(built), ["V3"])
+    report = run_validation(context(built), [ATOMS_MATCH_SOURCE])
 
     assert report.failing_entries == {"3u8v"}
 
     # The error detail identifies the offending atom.
-    assert "atom" in _errors(report, "V3", "3u8v")[0].detail
+    assert "atom" in _errors(report, ATOMS_MATCH_SOURCE, "3u8v")[0].detail
 
 
-def test_v3_accepts_symmetry_copy(built_dataset):
+def test_symmetry_copy_atoms_match_source(built_dataset):
     """2q2k's bioassembly copies are accepted and noted as symmetry copies."""
-    report = run_validation(context(built_dataset), ["V3"])
+    report = run_validation(context(built_dataset), [ATOMS_MATCH_SOURCE])
 
     # No V3 error on 2q2k.
-    assert _errors(report, "V3", "2q2k") == []
+    assert _errors(report, ATOMS_MATCH_SOURCE, "2q2k") == []
 
     # A finding mentions the symmetry copy.
     messages_2q2k = [f.message for f in report.findings if f.entry == "2q2k"]
     assert any("symmetry copy" in message for message in messages_2q2k)
 
 
-def test_v3_reports_atom_name_swap_as_info(built_dataset):
+def test_atom_name_swap_is_reported_as_info(built_dataset):
     """Arg 86 in 3u8v has swapped symmetric atom names; V3 reports it once, as INFO."""
-    report = run_validation(context(built_dataset), ["V3"])
+    report = run_validation(context(built_dataset), [ATOMS_MATCH_SOURCE])
 
     swaps = [f for f in report.findings if f.message == "expected (atom-name swap)"]
     arg86_swaps = [f for f in swaps if f.entry == "3u8v" and f.detail["res_id"] == 86]
@@ -101,7 +119,7 @@ def test_v3_reports_atom_name_swap_as_info(built_dataset):
     assert arg86_swaps[0].detail == {"chain": "A", "res_id": 86, "res_name": "ARG"}
 
 
-def test_v3_rejects_non_partner_name_swap(built_dataset, tmp_path):
+def test_non_partner_atom_name_swap_is_an_error(built_dataset, tmp_path):
     """Renaming PHE CD1 to CE2 is not a symmetric partner swap, so V3 fails the entry."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -111,12 +129,12 @@ def test_v3_rejects_non_partner_name_swap(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riv", rename)
 
-    report = run_validation(context(built), ["V3"])
+    report = run_validation(context(built), [ATOMS_MATCH_SOURCE])
 
     assert report.failing_entries == {"7riv"}
 
 
-def test_v3_rejects_moved_atom_in_symmetry_copy(built_dataset, tmp_path):
+def test_moved_atom_in_symmetry_copy_is_an_error(built_dataset, tmp_path):
     """Moving one atom in copy B_2 of 2q2k breaks the symmetry, so V3 fails the entry."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -127,12 +145,12 @@ def test_v3_rejects_moved_atom_in_symmetry_copy(built_dataset, tmp_path):
 
     _rewrite_npz(built, "2q2k", move)
 
-    report = run_validation(context(built), ["V3"])
+    report = run_validation(context(built), [ATOMS_MATCH_SOURCE])
 
     assert report.failing_entries == {"2q2k"}
 
 
-def test_v3_accepts_any_altloc(built_dataset, tmp_path):
+def test_atom_matching_accepts_any_altloc(built_dataset, tmp_path):
     """With two altlocs (A, B) in the source CIF, V3 accepts coordinates matching either one."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     path = built.cif_dir / "3u8v.cif"
@@ -152,22 +170,22 @@ def test_v3_accepts_any_altloc(built_dataset, tmp_path):
     )
     cif.write(path)
 
-    report = run_validation(context(built), ["V3"])
+    report = run_validation(context(built), [ATOMS_MATCH_SOURCE])
 
-    assert _errors(report, "V3", "3u8v") == [], [f.message for f in report.errors]
+    assert _errors(report, ATOMS_MATCH_SOURCE, "3u8v") == [], [f.message for f in report.errors]
 
 
-def test_v5_allows_unresolved_atoms(built_dataset):
+def test_unresolved_atoms_may_have_nan_coordinates(built_dataset):
     """Unresolved atoms carry NaN coordinates by design (OF3 cleanup); V5 accepts them."""
     coord = context(built_dataset).npz("3u8v")["coord"]
     assert np.isnan(coord).any(), "precondition: 3u8v has unresolved atoms"
 
-    report = run_validation(context(built_dataset), ["V5"])
+    report = run_validation(context(built_dataset), [FINITE_COORDINATES])
 
     assert report.errors == []
 
 
-def test_v5_detects_inf(built_dataset, tmp_path):
+def test_infinite_coordinates_are_an_error(built_dataset, tmp_path):
     """V5 flags an infinite coordinate."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -176,12 +194,12 @@ def test_v5_detects_inf(built_dataset, tmp_path):
 
     _rewrite_npz(built, "3u8v", poison)
 
-    report = run_validation(context(built), ["V5"])
+    report = run_validation(context(built), [FINITE_COORDINATES])
 
     assert report.failing_entries == {"3u8v"}
 
 
-def test_v5_detects_chain_without_resolved_atoms(built_dataset, tmp_path):
+def test_chain_without_resolved_atoms_is_an_error(built_dataset, tmp_path):
     """A chain whose every atom is NaN can't be trained on; cleanup should have dropped it."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -191,14 +209,14 @@ def test_v5_detects_chain_without_resolved_atoms(built_dataset, tmp_path):
 
     _rewrite_npz(built, "3u8v", blank_first_chain)
 
-    report = run_validation(context(built), ["V5"])
+    report = run_validation(context(built), [FINITE_COORDINATES])
 
     # Exactly one V5 error, and it says why.
-    (error,) = _errors(report, "V5", "3u8v")
+    (error,) = _errors(report, FINITE_COORDINATES, "3u8v")
     assert "no resolved atoms" in error.message
 
 
-def test_v6_detects_metadata_mismatch(built_dataset, tmp_path):
+def test_cache_metadata_mismatch_is_an_error(built_dataset, tmp_path):
     """V6 flags an entry whose cache metadata is missing a chain that the NPZ has."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     path = built.output_dir / "dataset_cache.json"
@@ -208,12 +226,12 @@ def test_v6_detects_metadata_mismatch(built_dataset, tmp_path):
     del data["structure_data"]["3u8v"]["chains"]["2"]
     path.write_text(json.dumps(data, indent=4))
 
-    report = run_validation(context(built), ["V6"])
+    report = run_validation(context(built), [CACHE_MATCHES_STRUCTURE])
 
     assert report.failing_entries == {"3u8v"}
 
 
-def test_v7_detects_author_numbering(built_dataset, tmp_path):
+def test_author_residue_numbering_is_an_error(built_dataset, tmp_path):
     """V7 flags residue ids shifted off the label numbering (as author numbering would be)."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -224,6 +242,6 @@ def test_v7_detects_author_numbering(built_dataset, tmp_path):
 
     _rewrite_npz(built, "3u8v", shift)
 
-    report = run_validation(context(built), ["V7"])
+    report = run_validation(context(built), [RESIDUE_NUMBERING])
 
     assert report.failing_entries == {"3u8v"}

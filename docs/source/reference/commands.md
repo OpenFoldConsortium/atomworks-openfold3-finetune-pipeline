@@ -82,9 +82,9 @@ Run the V checks on a dataset.
 | `--template-structure-dir` | None | Template structure directory. |
 | `--ccd-path` | None | Chemical Component Dictionary mmCIF. |
 | `--cache-path` | None | Dataset cache JSON. |
-| `--expect-ligands` / `--no-expect-ligands` | Off | Warn (V4) about entries without any ligand. |
+| `--expect-ligands` / `--no-expect-ligands` | Off | Warn about entries without any ligand (check V4). |
 | `--allow-errors` / `--fail-on-errors` | Off | Drop failing entries from the dataset cache and manifest.json and exit 0, instead of exiting 1. |
-| `--skip-dataset-load` | Off | Skip V21 (loading every entry through OF3's dataset. |
+| `--skip-dataset-load` | Off | Skip V21, the check that loads every entry through OF3's dataset (slow). |
 
 ## `finetune-prep`
 

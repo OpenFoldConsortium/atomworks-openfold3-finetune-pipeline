@@ -1,4 +1,7 @@
-"""Tests for the ligand checks V4, V8-V12, V18, V19."""
+"""Tests for the ligand checks.
+
+Has a ligand (V4), reference SDFs (V8-V12), ligands outside polymers (V18), separate copies (V19).
+"""
 
 import json
 import re
@@ -7,10 +10,29 @@ import shutil
 import numpy as np
 
 from aw_of3_finetune.validate import CHECKS, run_validation
+from aw_of3_finetune.validate.check_ids import (
+    HAS_LIGAND,
+    LIGANDS_NOT_IN_POLYMERS,
+    LIGAND_COPIES_SEPARATE,
+    ONE_CHEMISTRY_PER_MOL_ID,
+    REFERENCE_SDFS_EXIST,
+    REFERENCE_SDFS_SANITIZE,
+    SDF_ATOM_NAMES_MATCH,
+    SDF_ELEMENTS_MATCH,
+)
 from aw_of3_finetune.validate.findings import Severity
 from validate_helpers import context, mutable_copy
 
-LIGAND_CHECKS = ["V4", "V8", "V9", "V10", "V11", "V12", "V18", "V19"]
+LIGAND_CHECKS = [
+    HAS_LIGAND,
+    REFERENCE_SDFS_EXIST,
+    SDF_ELEMENTS_MATCH,
+    SDF_ATOM_NAMES_MATCH,
+    ONE_CHEMISTRY_PER_MOL_ID,
+    REFERENCE_SDFS_SANITIZE,
+    LIGANDS_NOT_IN_POLYMERS,
+    LIGAND_COPIES_SEPARATE,
+]
 
 
 def _rewrite_npz(built, entry, edit):
@@ -36,7 +58,7 @@ def test_ligand_checks_are_registered():
     """Every ligand check id is registered, and V9 and V10 share one implementation."""
     registered = {check for check in LIGAND_CHECKS if check in CHECKS}
     assert registered == set(LIGAND_CHECKS)
-    assert CHECKS["V9"] is CHECKS["V10"]
+    assert CHECKS[SDF_ELEMENTS_MATCH] is CHECKS[SDF_ATOM_NAMES_MATCH]
 
 
 def test_ligand_checks_pass_on_clean_build(built_dataset):
@@ -45,11 +67,11 @@ def test_ligand_checks_pass_on_clean_build(built_dataset):
 
     assert report.errors == [], [f.message for f in report.errors]
 
-    findings_from_other_checks = [f for f in report.findings if f.check != "V4"]
+    findings_from_other_checks = [f for f in report.findings if f.check != HAS_LIGAND]
     assert findings_from_other_checks == []
 
 
-def test_v9_v10_do_not_duplicate_findings(built_dataset, tmp_path):
+def test_sdf_element_and_atom_name_checks_do_not_duplicate_findings(built_dataset, tmp_path):
     """Running V9 and V10 together reports one unknown atom name once, under V10 only."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -58,41 +80,41 @@ def test_v9_v10_do_not_duplicate_findings(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riv", rename)
 
-    report = run_validation(context(built), ["V9", "V10"])
+    report = run_validation(context(built), [SDF_ELEMENTS_MATCH, SDF_ATOM_NAMES_MATCH])
 
-    assert [f.check for f in report.errors] == ["V10"]
+    assert [f.check for f in report.errors] == [SDF_ATOM_NAMES_MATCH]
 
 
-def test_v4_warns_only_when_expected(built_dataset):
+def test_missing_ligand_warns_only_when_ligands_expected(built_dataset):
     """V4 warns about entries without ligands only when --expect-ligands is set."""
-    quiet_report = run_validation(context(built_dataset), ["V4"])
-    loud_report = run_validation(context(built_dataset, expect_ligands=True), ["V4"])
+    quiet_report = run_validation(context(built_dataset), [HAS_LIGAND])
+    loud_report = run_validation(context(built_dataset, expect_ligands=True), [HAS_LIGAND])
 
     # Without the flag, 2crb gets no finding.
     quiet_2crb_findings = [f for f in quiet_report.findings if f.entry == "2crb"]
     assert quiet_2crb_findings == []
 
     # With the flag, the three entries without a ligand get a warning.
-    v4_warnings = [f for f in loud_report.warnings if f.check == "V4"]
-    assert {f.entry for f in v4_warnings} == {"2crb", "2q2k", "3u8v"}
-    assert "no ligand" in v4_warnings[0].message
+    no_ligand_warnings = [f for f in loud_report.warnings if f.check == HAS_LIGAND]
+    assert {f.entry for f in no_ligand_warnings} == {"2crb", "2q2k", "3u8v"}
+    assert "no ligand" in no_ligand_warnings[0].message
 
     # Warnings only; nothing fails.
     assert loud_report.errors == []
 
 
-def test_v8_detects_missing_sdf(built_dataset, tmp_path):
+def test_missing_reference_sdf_is_an_error(built_dataset, tmp_path):
     """V8 flags 7riv when its ligand's reference SDF (P06.sdf) is deleted."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     (built.output_dir / "reference_mols" / "P06.sdf").unlink()
 
-    report = run_validation(context(built), ["V8"])
+    report = run_validation(context(built), [REFERENCE_SDFS_EXIST])
 
     assert report.failing_entries == {"7riv"}
-    assert "P06.sdf" in _errors(report, "V8", "7riv")[0].message
+    assert "P06.sdf" in _errors(report, REFERENCE_SDFS_EXIST, "7riv")[0].message
 
 
-def test_v8_per_residue_lookup(built_dataset_with_waters, tmp_path):
+def test_reference_sdf_lookup_is_per_residue(built_dataset_with_waters, tmp_path):
     """Waters (kept via remove_waters: false) and ions resolve per residue."""
     cache = json.loads((built_dataset_with_waters.output_dir / "dataset_cache.json").read_text())
     chains = cache["structure_data"]["3u8v"]["chains"]
@@ -105,7 +127,7 @@ def test_v8_per_residue_lookup(built_dataset_with_waters, tmp_path):
     )
 
     # With all reference SDFs present there is no error.
-    clean_report = run_validation(context(built_dataset_with_waters), ["V8"])
+    clean_report = run_validation(context(built_dataset_with_waters), [REFERENCE_SDFS_EXIST])
     assert clean_report.errors == []
 
     # Deleting the water (HOH) or the nickel ion (NI) SDF is flagged on 3u8v by name.
@@ -113,12 +135,12 @@ def test_v8_per_residue_lookup(built_dataset_with_waters, tmp_path):
         built = mutable_copy(built_dataset_with_waters, tmp_path / mol_id)
         (built.output_dir / "reference_mols" / f"{mol_id}.sdf").unlink()
 
-        report = run_validation(context(built), ["V8"])
+        report = run_validation(context(built), [REFERENCE_SDFS_EXIST])
 
-        assert f"{mol_id}.sdf" in _errors(report, "V8", "3u8v")[0].message
+        assert f"{mol_id}.sdf" in _errors(report, REFERENCE_SDFS_EXIST, "3u8v")[0].message
 
 
-def test_v10_detects_unknown_atom_name(built_dataset, tmp_path):
+def test_unknown_sdf_atom_name_is_an_error(built_dataset, tmp_path):
     """V10 flags a ligand atom name (ZZ9) that is not in the reference SDF."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -127,13 +149,13 @@ def test_v10_detects_unknown_atom_name(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riv", rename)
 
-    report = run_validation(context(built), ["V9", "V10"])
+    report = run_validation(context(built), [SDF_ELEMENTS_MATCH, SDF_ATOM_NAMES_MATCH])
 
     assert report.failing_entries == {"7riv"}
-    assert "ZZ9" in _errors(report, "V10", "7riv")[0].message
+    assert "ZZ9" in _errors(report, SDF_ATOM_NAMES_MATCH, "7riv")[0].message
 
 
-def test_v9_detects_element_change(built_dataset, tmp_path):
+def test_sdf_element_change_is_an_error(built_dataset, tmp_path):
     """V9 flags a ligand atom whose element differs from the reference, and V10 stays quiet."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -143,13 +165,13 @@ def test_v9_detects_element_change(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riv", change)
 
-    report = run_validation(context(built), ["V9", "V10"])
+    report = run_validation(context(built), [SDF_ELEMENTS_MATCH, SDF_ATOM_NAMES_MATCH])
 
     assert report.failing_entries == {"7riv"}
-    assert "element" in _errors(report, "V9", "7riv")[0].message
+    assert "element" in _errors(report, SDF_ELEMENTS_MATCH, "7riv")[0].message
 
     # The atom name is unchanged, so V10 has nothing to report.
-    assert _errors(report, "V10", "7riv") == []
+    assert _errors(report, SDF_ATOM_NAMES_MATCH, "7riv") == []
 
 
 def _duplicate_entry(built, src, dst):
@@ -167,12 +189,12 @@ def _duplicate_entry(built, src, dst):
     path.write_text(json.dumps(data, indent=4))
 
 
-def test_v11_detects_two_chemistries(built_dataset, tmp_path):
+def test_two_chemistries_under_one_mol_id_is_an_error(built_dataset, tmp_path):
     """V11 flags both entries when two copies of P06 disagree on an element."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
     # Precondition: the unmodified dataset is consistent.
-    assert run_validation(context(built), ["V11"]).errors == []
+    assert run_validation(context(built), [ONE_CHEMISTRY_PER_MOL_ID]).errors == []
 
     # Duplicate 7riv as 7riw, then change one P06 atom's element in 7riw.
     _duplicate_entry(built, "7riv", "7riw")
@@ -183,19 +205,19 @@ def test_v11_detects_two_chemistries(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riw", change)
 
-    report = run_validation(context(built), ["V11"])
+    report = run_validation(context(built), [ONE_CHEMISTRY_PER_MOL_ID])
 
     assert report.failing_entries == {"7riv", "7riw"}
 
     # The finding names the molecule, the property that differs, and both entries.
-    finding = _errors(report, "V11", "7riw")[0]
+    finding = _errors(report, ONE_CHEMISTRY_PER_MOL_ID, "7riw")[0]
     assert "P06" in finding.message
     assert "element" in finding.message
     assert finding.detail["mol_id"] == "P06"
     assert finding.detail["entries"] == ["7riv", "7riw"]
 
 
-def test_v11_detects_bond_disagreement(built_dataset, tmp_path):
+def test_bond_disagreement_under_one_mol_id_is_an_error(built_dataset, tmp_path):
     """V11 flags both entries when one copy of P06 is missing a bond."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _duplicate_entry(built, "7riv", "7riw")
@@ -212,13 +234,13 @@ def test_v11_detects_bond_disagreement(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riw", drop_bond)
 
-    report = run_validation(context(built), ["V11"])
+    report = run_validation(context(built), [ONE_CHEMISTRY_PER_MOL_ID])
 
     assert report.failing_entries == {"7riv", "7riw"}
-    assert "bond" in _errors(report, "V11", "7riw")[0].message
+    assert "bond" in _errors(report, ONE_CHEMISTRY_PER_MOL_ID, "7riw")[0].message
 
 
-def test_v11_detects_disjoint_atom_names(built_dataset, tmp_path):
+def test_disjoint_atom_names_under_one_mol_id_is_an_error(built_dataset, tmp_path):
     """V11 flags both entries when one copy of P06 renames every atom."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _duplicate_entry(built, "7riv", "7riw")
@@ -230,13 +252,13 @@ def test_v11_detects_disjoint_atom_names(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riw", rename)
 
-    report = run_validation(context(built), ["V11"])
+    report = run_validation(context(built), [ONE_CHEMISTRY_PER_MOL_ID])
 
     assert report.failing_entries == {"7riv", "7riw"}
-    assert "no atom names in common" in _errors(report, "V11", "7riw")[0].message
+    assert "no atom names in common" in _errors(report, ONE_CHEMISTRY_PER_MOL_ID, "7riw")[0].message
 
 
-def test_v11_allows_partial_ligand(built_dataset, tmp_path):
+def test_partial_ligand_under_one_mol_id_is_allowed(built_dataset, tmp_path):
     """A copy of P06 missing its last atom (partially resolved ligand) is not a conflict."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _duplicate_entry(built, "7riv", "7riw")
@@ -260,12 +282,12 @@ def test_v11_allows_partial_ligand(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riw", drop_atom)
 
-    report = run_validation(context(built), ["V11"])
+    report = run_validation(context(built), [ONE_CHEMISTRY_PER_MOL_ID])
 
     assert report.errors == []
 
 
-def test_v12_detects_unsanitizable_sdf(built_dataset, tmp_path):
+def test_unsanitizable_reference_sdf_is_an_error(built_dataset, tmp_path):
     """V12 flags a reference SDF that RDKit cannot sanitize (a carbon with five bonds)."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     (built.output_dir / "reference_mols" / "P06.sdf").write_text(
@@ -281,13 +303,13 @@ def test_v12_detects_unsanitizable_sdf(built_dataset, tmp_path):
         "M  END\n$$$$\n"
     )
 
-    report = run_validation(context(built), ["V12"])
+    report = run_validation(context(built), [REFERENCE_SDFS_SANITIZE])
 
     assert report.failing_entries == {"7riv"}
-    assert "P06" in _errors(report, "V12", "7riv")[0].message
+    assert "P06" in _errors(report, REFERENCE_SDFS_SANITIZE, "7riv")[0].message
 
 
-def test_v18_detects_ligand_in_polymer(built_dataset, tmp_path):
+def test_ligand_inside_polymer_chain_is_an_error(built_dataset, tmp_path):
     """V18 flags a ligand relabeled into a protein chain."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -298,13 +320,13 @@ def test_v18_detects_ligand_in_polymer(built_dataset, tmp_path):
 
     _rewrite_npz(built, "7riv", relabel)
 
-    report = run_validation(context(built), ["V18"])
+    report = run_validation(context(built), [LIGANDS_NOT_IN_POLYMERS])
 
     assert report.failing_entries == {"7riv"}
-    assert "P06" in _errors(report, "V18", "7riv")[0].message
+    assert "P06" in _errors(report, LIGANDS_NOT_IN_POLYMERS, "7riv")[0].message
 
 
-def test_v19_detects_merged_copies(built_dataset, tmp_path):
+def test_merged_ligand_copies_are_an_error(built_dataset, tmp_path):
     """V19 flags two ligand copies merged into one chain (a multi-atom ligand chain)."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -313,13 +335,13 @@ def test_v19_detects_merged_copies(built_dataset, tmp_path):
 
     _rewrite_npz(built, "1a3n", merge)
 
-    report = run_validation(context(built), ["V19"])
+    report = run_validation(context(built), [LIGAND_COPIES_SEPARATE])
 
     assert report.failing_entries == {"1a3n"}
-    assert "multi-atom" in _errors(report, "V19", "1a3n")[0].message
+    assert "multi-atom" in _errors(report, LIGAND_COPIES_SEPARATE, "1a3n")[0].message
 
 
-def test_v19_detects_bond_between_ligand_chains(built_dataset, tmp_path):
+def test_bond_between_ligand_chains_is_an_error(built_dataset, tmp_path):
     """V19 flags a bond added between two different ligand chains."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -331,13 +353,13 @@ def test_v19_detects_bond_between_ligand_chains(built_dataset, tmp_path):
 
     _rewrite_npz(built, "1a3n", bridge)
 
-    report = run_validation(context(built), ["V19"])
+    report = run_validation(context(built), [LIGAND_COPIES_SEPARATE])
 
     assert report.failing_entries == {"1a3n"}
-    assert "between ligand chains" in _errors(report, "V19", "1a3n")[0].message
+    assert "between ligand chains" in _errors(report, LIGAND_COPIES_SEPARATE, "1a3n")[0].message
 
 
-def test_v19_allows_water_chain(built_dataset_with_waters):
+def test_ligand_copies_check_allows_water_chain(built_dataset_with_waters):
     """Waters (kept via remove_waters: false): one chain of many HOH is not merged copies."""
     npz = context(built_dataset_with_waters).npz("1a3n")
     water = npz["res_name"] == "HOH"
@@ -347,7 +369,7 @@ def test_v19_allows_water_chain(built_dataset_with_waters):
     water_residue_ids = set(npz["res_id"][water & (npz["chain_id"] == water_chain)].tolist())
     assert len(water_residue_ids) > 1
 
-    report = run_validation(context(built_dataset_with_waters), ["V19"])
+    report = run_validation(context(built_dataset_with_waters), [LIGAND_COPIES_SEPARATE])
 
     assert report.findings == []
 
@@ -356,21 +378,21 @@ def test_ligand_severities(built_dataset):
     """V4 findings are warnings, never errors."""
     report = run_validation(context(built_dataset, expect_ligands=True), LIGAND_CHECKS)
 
-    actual_v4_severities = {f.severity for f in report.findings if f.check == "V4"}
-    assert actual_v4_severities <= {Severity.WARNING}
+    actual_no_ligand_severities = {f.severity for f in report.findings if f.check == HAS_LIGAND}
+    assert actual_no_ligand_severities <= {Severity.WARNING}
 
 
-def test_v9_v10_per_entry_crash_reported_under_each_requested_id(built_dataset, tmp_path):
+def test_sdf_atom_check_crash_reported_under_each_requested_id(built_dataset, tmp_path):
     """A corrupt NPZ is reported as an error under whichever of V9 or V10 was requested."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     (built.output_dir / "of3_compressed_structures" / "7riv" / "7riv.npz").write_bytes(b"junk")
 
-    for check in ("V9", "V10"):
+    for check in (SDF_ELEMENTS_MATCH, SDF_ATOM_NAMES_MATCH):
         report = run_validation(context(built), [check])
         assert _errors(report, check, "7riv"), check
 
 
-def test_v10_detects_sdf_without_atom_names(built_dataset, tmp_path):
+def test_sdf_without_atom_names_is_an_error(built_dataset, tmp_path):
     """V10 flags a reference SDF that has no atom-name annotation to compare against."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     path = built.output_dir / "reference_mols" / "P06.sdf"
@@ -380,11 +402,11 @@ def test_v10_detects_sdf_without_atom_names(built_dataset, tmp_path):
     assert "atom_annot_atom_name" not in text
     path.write_text(text)
 
-    report = run_validation(context(built), ["V10"])
+    report = run_validation(context(built), [SDF_ATOM_NAMES_MATCH])
 
     assert report.failing_entries == {"7riv"}
 
     # The message names the SDF file and says the atom names are missing.
-    message = _errors(report, "V10", "7riv")[0].message
+    message = _errors(report, SDF_ATOM_NAMES_MATCH, "7riv")[0].message
     assert "P06.sdf" in message
     assert "atom names" in message
