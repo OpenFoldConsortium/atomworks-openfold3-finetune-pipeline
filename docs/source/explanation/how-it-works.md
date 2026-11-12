@@ -4,62 +4,58 @@ The pipeline turns a directory of mmCIF files into everything OpenFold3 needs to
 
 ## The three steps
 
-`finetune-pipeline` runs the commands below from top to bottom. Solid arrows always run. Dashed arrows lead to a stage that is optional or that a flag skips.
+`finetune-pipeline` runs these commands from top to bottom. Dashed boxes are stages that are optional or that a flag can skip.
 
 ```mermaid
 flowchart TD
-    subgraph annotate["1. Annotate: preprocessing and annotation"]
-        prepare["prepare-inputs<br/>optional, run by hand"]
-        prep["finetune-prep<br/>cleaned_structures/"]
-        prepare -.-> prep
+    subgraph annotate["1. Annotate"]
+        prepare(["prepare-inputs<br/>optional, run by hand"]) -.-> prep["finetune-prep<br/>cleaned_structures/"]
     end
-
-    subgraph search["2. Search: MSAs and templates"]
-        imported["import-msas<br/>organized_msas/"]
-        msas["generate-msas<br/>organized_msas/"]
-        fetch["fetch-templates"]
-        msas -. "unless --no-templates" .-> fetch
+    subgraph search["2. Search"]
+        msas["generate-msas or import-msas<br/>organized_msas/"] --> fetch["fetch-templates"]
     end
-
-    subgraph handoff["3. Hand off: build what OpenFold3 reads"]
-        cache["materialize-dataset-cache<br/>dataset_cache.json"]
-        pretemplates["preprocess-templates"]
-        npz["NPZ structure files<br/>of3_compressed_structures/"]
-        split["split-dataset"]
-        config["generate-train-config<br/>train.yml<br/>needs an MSA folder"]
-        cache -. "after fetch-templates" .-> pretemplates
-        pretemplates -.-> npz
-        cache --> npz
-        npz -. "with --split-csv" .-> split
-        split -.-> config
-        npz -.-> config
+    subgraph handoff["3. Hand off"]
+        cache["materialize-dataset-cache<br/>dataset_cache.json"] --> pretemplates["preprocess-templates"]
+        pretemplates --> npz["NPZ structure files"] --> split["split-dataset"]
+        split --> config["generate-train-config<br/>train.yml"]
     end
-
     subgraph check["Check"]
-        validate["validate-dataset<br/>validation.json"]
-        report["finetune-report<br/>report/index.html"]
-        validate -. "unless --skip-report" .-> report
+        validate["validate-dataset"] --> report(["finetune-report<br/>report/index.html"])
     end
+    prep --> msas
+    fetch --> cache
+    config --> validate
 
-    prep -. "with --msa-sources" .-> imported
-    prep -. "with --organized-msa-dir<br/>and no --msa-sources" .-> msas
-    prep --> cache
-    imported -.-> cache
-    msas -.-> cache
-    fetch -.-> cache
-    config -. "unless --skip-validation" .-> validate
-
-    classDef optional stroke-dasharray: 5 5
-    class prepare,imported,msas,fetch,pretemplates,split,config,validate,report optional
+    classDef annotate fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    classDef search fill:#f3e8ff,stroke:#a855f7,color:#3b0764
+    classDef handoff fill:#fef9c3,stroke:#eab308,color:#713f12
+    classDef check fill:#dcfce7,stroke:#22c55e,color:#14532d
+    class prepare,prep annotate
+    class msas,fetch search
+    class cache,pretemplates,npz,split,config handoff
+    class validate,report check
+    style prepare stroke-dasharray: 5 5
+    style msas stroke-dasharray: 5 5
+    style fetch stroke-dasharray: 5 5
+    style pretemplates stroke-dasharray: 5 5
+    style split stroke-dasharray: 5 5
+    style config stroke-dasharray: 5 5
+    style validate stroke-dasharray: 5 5
+    style report stroke-dasharray: 5 5
 ```
 
-Step 2 runs one of two commands, or neither:
+| Stage | Runs when |
+|---|---|
+| `prepare-inputs` | You run it by hand, before the pipeline |
+| `import-msas` | `--msa-sources` is given |
+| `generate-msas` | `--organized-msa-dir` is given, without `--msa-sources` |
+| `fetch-templates`, `preprocess-templates` | `generate-msas` ran, and `--no-templates` is not given |
+| `split-dataset` | `--split-csv` is given |
+| `generate-train-config` | There is an MSA folder: one from step 2, or an `<output-dir>/organized_msas` left by an earlier run |
+| `validate-dataset` | `--skip-validation` is not given |
+| `finetune-report` | `--skip-report` is not given |
 
-- With `--msa-sources`, `import-msas` imports your own MSAs. The template stages are skipped, because templates with `--msa-sources` are not supported yet.
-- With `--organized-msa-dir` and no `--msa-sources`, `generate-msas` queries ColabFold, then `fetch-templates` and `preprocess-templates` run unless you pass `--no-templates`.
-- With neither, step 2 is skipped.
-
-`generate-train-config` runs whenever there is an MSA folder: one from step 2, or an `<output-dir>/organized_msas` left by an earlier run. Dashed boxes are the stages that can be skipped.
+Every other stage always runs.
 
 | Step | Commands | Output |
 |---|---|---|
