@@ -4,7 +4,7 @@ Validate runs sanity checks on your dataset before you spend GPU time. Most data
 
 ## Two kinds of check
 
-- **Validate checks (V1-V21)** ask whether the dataset is consistent and loads. They compare outputs against your inputs, and each other. An error stops the pipeline.
+- **Validate checks (V0-V21)** ask whether the dataset is consistent and loads, for example V3 (atoms match the source CIF) and V21 (every entry loads through OpenFold3's dataset). They compare outputs against your inputs, and each other. An error stops the pipeline.
 - **Report checks** ask whether the chemistry and geometry look right. They never stop the pipeline.
 
 See [Report checks](../reference/report-checks.md) for the full list.

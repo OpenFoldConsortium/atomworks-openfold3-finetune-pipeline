@@ -80,6 +80,7 @@ from aw_of3_finetune.templates import (
 from aw_of3_finetune.templates import fetch_templates as fetch_templates_for_dataset
 from aw_of3_finetune.training_config import LEGACY_CACHE_WARNING, is_legacy_dataset_cache, write_train_config
 from aw_of3_finetune.validate import CHECKS, Finding, Severity, ValidationContext, run_validation
+from aw_of3_finetune.validate.check_ids import DATASET_LOADS
 
 
 logger = logging.getLogger(__name__)
@@ -956,14 +957,14 @@ def _drop_entries(output_dir: Path, cache_path: Path, failing: set[str]) -> None
 @click.option("--cache-path", default=None, type=click.Path(path_type=Path, dir_okay=False),
               help="Dataset cache JSON. Defaults to <output-dir>/dataset_cache.json.")
 @click.option("--expect-ligands/--no-expect-ligands", default=False, show_default=True,
-              help="Warn (V4) about entries without any ligand.")
+              help="Warn about entries without any ligand (check V4).")
 @click.option("--allow-errors/--fail-on-errors", default=False,
               help="Drop failing entries from the dataset cache and manifest.json and exit 0, "
               "instead of exiting 1. Structure/SDF/MSA files are untouched; cache and manifest are "
               "rewritten (backups saved as *.pre-validate.json). Refuses when every entry fails "
               "or on dataset-level errors.")
 @click.option("--skip-dataset-load", is_flag=True, default=False,
-              help="Skip V21 (loading every entry through OF3's dataset; slow).")
+              help="Skip V21, the check that loads every entry through OF3's dataset (slow).")
 @click.pass_context
 def validate(
     ctx: click.Context,
@@ -998,10 +999,10 @@ def validate(
         expect_ligands=expect_ligands,
         cache_path=cache_path,
     )
-    checks = [c for c in CHECKS if not (skip_dataset_load and c == "V21")]
+    checks = [c for c in CHECKS if not (skip_dataset_load and c == DATASET_LOADS)]
     report = run_validation(vctx, checks)
     if skip_dataset_load:
-        report.findings.append(Finding("V21", Severity.INFO, None, "skipped: --skip-dataset-load"))
+        report.findings.append(Finding(DATASET_LOADS, Severity.INFO, None, "skipped: --skip-dataset-load"))
     report_path = output_dir / "validation.json"
     report.to_json(report_path, {"allow_errors_applied": False, "dropped": []})
     click.echo(report.summary_text())
@@ -1205,7 +1206,7 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
 @click.option("--skip-report", is_flag=True, default=False,
               help="Skip the report stage (<output-dir>/report/index.html; rebuild it later with finetune-report).")
 @click.option("--skip-dataset-load", is_flag=True, default=False,
-              help="Passed through to validate: skip V21 (loading every entry through OF3's dataset; slow).")
+              help="Passed through to validate: skip V21, the check that loads every entry through OF3's dataset (slow).")
 @click.option("--wandb-project", default=None, help="Passed through to generate-train-config.")
 @click.option("--wandb-entity", default=None, help="Passed through to generate-train-config.")
 @click.option("--wandb-name", default=None, help="Passed through to generate-train-config.")

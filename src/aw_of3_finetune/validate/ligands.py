@@ -1,4 +1,8 @@
-"""Ligand checks V4, V8-V12, V18, V19: reference molecules and ligand chain integrity."""
+"""Ligand checks: reference molecules and ligand chain integrity.
+
+V4 has a ligand; V8-V12 reference SDFs exist, match the crystal (elements, atom names), agree
+per mol ID and sanitize; V18 ligands are not inside polymers; V19 ligand copies stay separate.
+"""
 
 from __future__ import annotations
 
@@ -17,6 +21,16 @@ from aw_of3_finetune.ligand_names import (
     read_ccd_ids,
     residue_signature,
     signature_difference,
+)
+from aw_of3_finetune.validate.check_ids import (
+    HAS_LIGAND,
+    LIGANDS_NOT_IN_POLYMERS,
+    LIGAND_COPIES_SEPARATE,
+    ONE_CHEMISTRY_PER_MOL_ID,
+    REFERENCE_SDFS_EXIST,
+    REFERENCE_SDFS_SANITIZE,
+    SDF_ATOM_NAMES_MATCH,
+    SDF_ELEMENTS_MATCH,
 )
 from aw_of3_finetune.validate.context import ValidationContext
 from aw_of3_finetune.validate.findings import Finding, Severity
@@ -65,7 +79,7 @@ def _check_v4(ctx: ValidationContext, entry: str) -> list[Finding]:
     if any(not _is_trivial(r) for r in _residues(ctx, entry)):
         return []
     return [
-        Finding("V4", Severity.WARNING, entry, "no ligand other than water and ions")
+        Finding(HAS_LIGAND, Severity.WARNING, entry, "no ligand other than water and ions")
     ]
 
 
@@ -80,7 +94,7 @@ def check_v4_ligand_present(ctx: ValidationContext) -> list[Finding]:
     """
     if not ctx.expect_ligands:
         return []
-    return _per_entry(ctx, "V4", _check_v4)
+    return _per_entry(ctx, HAS_LIGAND, _check_v4)
 
 
 def _check_v8(ctx: ValidationContext, entry: str) -> list[Finding]:
@@ -93,7 +107,7 @@ def _check_v8(ctx: ValidationContext, entry: str) -> list[Finding]:
         seen.add(mol_id)
         findings.append(
             Finding(
-                "V8",
+                REFERENCE_SDFS_EXIST,
                 Severity.ERROR,
                 entry,
                 f"{mol_id}.sdf missing from reference_mols (chain {res['label']})",
@@ -112,7 +126,7 @@ def check_v8_reference_mols_exist(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings, one per missing SDF per entry.
     """
-    return _per_entry(ctx, "V8", _check_v8)
+    return _per_entry(ctx, REFERENCE_SDFS_EXIST, _check_v8)
 
 
 def _sdf_atoms(ctx: ValidationContext, mol_id: str) -> dict[str, str] | None:
@@ -144,7 +158,7 @@ def _check_v9_v10(ctx: ValidationContext, entry: str) -> list[Finding]:
                 unreadable.add(mol_id)
                 findings.append(
                     Finding(
-                        "V10",
+                        SDF_ATOM_NAMES_MATCH,
                         Severity.ERROR,
                         entry,
                         f"{mol_id}.sdf: atom names could not be read ({type(exc).__name__}: {exc})",
@@ -162,7 +176,7 @@ def _check_v9_v10(ctx: ValidationContext, entry: str) -> list[Finding]:
         if extra:
             findings.append(
                 Finding(
-                    "V10",
+                    SDF_ATOM_NAMES_MATCH,
                     Severity.ERROR,
                     entry,
                     f"{mol_id}: crystal atom name(s) {extra} not in reference SDF "
@@ -174,7 +188,7 @@ def _check_v9_v10(ctx: ValidationContext, entry: str) -> list[Finding]:
         for name, crystal, sdf in wrong:
             findings.append(
                 Finding(
-                    "V9",
+                    SDF_ELEMENTS_MATCH,
                     Severity.ERROR,
                     entry,
                     f"{mol_id}: atom {name} has element {crystal} in crystal "
@@ -193,7 +207,7 @@ def check_v9_v10_ref_atoms_match_crystal(ctx: ValidationContext) -> list[Finding
         ctx: Validation context.
 
     Returns:
-        E findings tagged ``"V9"`` or ``"V10"``.
+        E findings tagged ``SDF_ELEMENTS_MATCH`` (V9) or ``SDF_ATOM_NAMES_MATCH`` (V10).
     """
     findings: list[Finding] = []
     for entry in ctx.entries():
@@ -202,7 +216,7 @@ def check_v9_v10_ref_atoms_match_crystal(ctx: ValidationContext) -> list[Finding
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
             findings.extend(
-                Finding(check, Severity.ERROR, entry, message) for check in ("V9", "V10")
+                Finding(check, Severity.ERROR, entry, message) for check in (SDF_ELEMENTS_MATCH, SDF_ATOM_NAMES_MATCH)
             )
     return findings
 
@@ -251,7 +265,7 @@ def check_v11_one_chemistry_per_mol_id(ctx: ValidationContext) -> list[Finding]:
                     exact_ids.add(res["mol_id"])
         except Exception as exc:
             findings.append(
-                Finding("V11", Severity.ERROR, entry, f"{type(exc).__name__}: {exc}")
+                Finding(ONE_CHEMISTRY_PER_MOL_ID, Severity.ERROR, entry, f"{type(exc).__name__}: {exc}")
             )
     for mol_id, by_sig in sorted(sigs.items()):
         reasons: dict[str, str] = {}
@@ -266,7 +280,7 @@ def check_v11_one_chemistry_per_mol_id(ctx: ValidationContext) -> list[Finding]:
         for entry in involved:
             findings.append(
                 Finding(
-                    "V11",
+                    ONE_CHEMISTRY_PER_MOL_ID,
                     Severity.ERROR,
                     entry,
                     f"{mol_id}: inconsistent chemistry across residues ({reasons[entry]})",
@@ -296,7 +310,7 @@ def _check_v12(ctx: ValidationContext, entry: str) -> list[Finding]:
         if path.exists() and not _sanitizes(path):
             findings.append(
                 Finding(
-                    "V12",
+                    REFERENCE_SDFS_SANITIZE,
                     Severity.ERROR,
                     entry,
                     f"{mol_id}.sdf does not sanitize in RDKit",
@@ -315,7 +329,7 @@ def check_v12_ref_mols_sanitize(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings, one per unsanitizable SDF per entry.
     """
-    return _per_entry(ctx, "V12", _check_v12)
+    return _per_entry(ctx, REFERENCE_SDFS_SANITIZE, _check_v12)
 
 
 def _source_polymer_residues(ctx: ValidationContext, entry: str) -> dict[str, set[str]]:
@@ -344,7 +358,7 @@ def _check_v18(ctx: ValidationContext, entry: str) -> list[Finding]:
             label = str(npz["label_asym_id"][mask][0])
             findings.append(
                 Finding(
-                    "V18",
+                    LIGANDS_NOT_IN_POLYMERS,
                     Severity.ERROR,
                     entry,
                     f"polymer chain {label} contains residue(s) {extra} "
@@ -364,7 +378,7 @@ def check_v18_ligands_not_in_polymers(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings, one per offending polymer chain.
     """
-    return _per_entry(ctx, "V18", _check_v18)
+    return _per_entry(ctx, LIGANDS_NOT_IN_POLYMERS, _check_v18)
 
 
 def _check_v19(ctx: ValidationContext, entry: str) -> list[Finding]:
@@ -384,7 +398,7 @@ def _check_v19(ctx: ValidationContext, entry: str) -> list[Finding]:
     for a, b in sorted(cross):
         findings.append(
             Finding(
-                "V19",
+                LIGAND_COPIES_SEPARATE,
                 Severity.ERROR,
                 entry,
                 f"bond between ligand chains {labels[a]} and {labels[b]}",
@@ -404,7 +418,7 @@ def _check_v19(ctx: ValidationContext, entry: str) -> list[Finding]:
         if count > 1:
             findings.append(
                 Finding(
-                    "V19",
+                    LIGAND_COPIES_SEPARATE,
                     Severity.ERROR,
                     entry,
                     f"ligand chain {labels[c]} has {count} bonded multi-atom components "
@@ -424,4 +438,4 @@ def check_v19_ligand_copies_separate(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings for cross-chain bonds and chains holding several multi-atom copies.
     """
-    return _per_entry(ctx, "V19", _check_v19)
+    return _per_entry(ctx, LIGAND_COPIES_SEPARATE, _check_v19)

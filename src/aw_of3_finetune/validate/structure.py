@@ -1,4 +1,8 @@
-"""Structure checks V1-V3 and V5-V7: chains, sequences, coordinates, numbering."""
+"""Structure checks: chains, sequences, atoms, coordinates, cache metadata, numbering.
+
+V1 chains accounted for, V2 polymer sequences, V3 atoms match the source, V5 finite
+coordinates, V6 cache matches the structure, V7 residue numbering.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +15,14 @@ from rdkit import Chem
 from scipy.spatial import cKDTree
 
 from aw_of3_finetune.pipeline import ChainMismatchError, check_chain_consistency
+from aw_of3_finetune.validate.check_ids import (
+    ATOMS_MATCH_SOURCE,
+    CACHE_MATCHES_STRUCTURE,
+    CHAINS_ACCOUNTED,
+    FINITE_COORDINATES,
+    POLYMER_SEQUENCES,
+    RESIDUE_NUMBERING,
+)
 from aw_of3_finetune.validate.context import ValidationContext
 from aw_of3_finetune.validate.findings import Finding, Severity
 
@@ -133,7 +145,7 @@ def _check_v1(ctx: ValidationContext, entry: str) -> list[Finding]:
         else:
             findings.append(
                 Finding(
-                    "V1",
+                    CHAINS_ACCOUNTED,
                     Severity.ERROR,
                     entry,
                     f"chain {chain} dropped without a known reason",
@@ -143,7 +155,7 @@ def _check_v1(ctx: ValidationContext, entry: str) -> list[Finding]:
             continue
         findings.append(
             Finding(
-                "V1", Severity.INFO, entry, reason, {"chain": chain, "reason": reason}
+                CHAINS_ACCOUNTED, Severity.INFO, entry, reason, {"chain": chain, "reason": reason}
             )
         )
     return findings
@@ -158,7 +170,7 @@ def check_v1_chains_accounted(ctx: ValidationContext) -> list[Finding]:
     Returns:
         INFO findings for explained drops, E findings for unexplained ones.
     """
-    return _per_entry(ctx, "V1", _check_v1)
+    return _per_entry(ctx, CHAINS_ACCOUNTED, _check_v1)
 
 
 def _check_v2(ctx: ValidationContext, entry: str) -> list[Finding]:
@@ -169,13 +181,13 @@ def _check_v2(ctx: ValidationContext, entry: str) -> list[Finding]:
         if entity not in src:
             findings.append(
                 Finding(
-                    "V2", Severity.ERROR, entry, f"entity {entity} missing from source"
+                    POLYMER_SEQUENCES, Severity.ERROR, entry, f"entity {entity} missing from source"
                 )
             )
         elif src[entity] != seq:
             findings.append(
                 Finding(
-                    "V2",
+                    POLYMER_SEQUENCES,
                     Severity.ERROR,
                     entry,
                     f"entity {entity} sequence differs from source",
@@ -198,7 +210,7 @@ def check_v2_polymer_sequences(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings for differing or missing entities.
     """
-    return _per_entry(ctx, "V2", _check_v2)
+    return _per_entry(ctx, POLYMER_SEQUENCES, _check_v2)
 
 
 def _kabsch_max_deviation(moving: np.ndarray, fixed: np.ndarray) -> float:
@@ -278,7 +290,7 @@ def _check_v3(ctx: ValidationContext, entry: str) -> list[Finding]:
             passed.setdefault(_base_label(lab), lab)
             findings.extend(
                 Finding(
-                    "V3",
+                    ATOMS_MATCH_SOURCE,
                     Severity.INFO,
                     entry,
                     "expected (atom-name swap)",
@@ -301,7 +313,7 @@ def _check_v3(ctx: ValidationContext, entry: str) -> list[Finding]:
                 if max_dev <= COORD_TOL:
                     findings.append(
                         Finding(
-                            "V3",
+                            ATOMS_MATCH_SOURCE,
                             Severity.INFO,
                             entry,
                             f"chain {lab}: symmetry copy of {ref}",
@@ -311,7 +323,7 @@ def _check_v3(ctx: ValidationContext, entry: str) -> list[Finding]:
                     continue
         findings.append(
             Finding(
-                "V3",
+                ATOMS_MATCH_SOURCE,
                 Severity.ERROR,
                 entry,
                 f"chain {lab}: {detail['n_unmatched']} atom(s) not in source",
@@ -330,7 +342,7 @@ def check_v3_atoms_match_source(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings with the worst atom; INFO findings for accepted symmetry copies.
     """
-    return _per_entry(ctx, "V3", _check_v3)
+    return _per_entry(ctx, ATOMS_MATCH_SOURCE, _check_v3)
 
 
 def _sdf_problem(path) -> str | None:
@@ -352,18 +364,18 @@ def _check_v5(ctx: ValidationContext, entry: str) -> list[Finding]:
     if np.isinf(coord).any():
         n = int(np.isinf(coord).any(axis=1).sum())
         findings.append(
-            Finding("V5", Severity.ERROR, entry, "infinite coordinates", {"n_atoms": n})
+            Finding(FINITE_COORDINATES, Severity.ERROR, entry, "infinite coordinates", {"n_atoms": n})
         )
     resolved = ~np.isnan(coord).any(axis=1)
     if not np.nan_to_num(coord[resolved], posinf=0.0, neginf=0.0).any():
         findings.append(
-            Finding("V5", Severity.ERROR, entry, "no resolved atom has a non-zero coordinate")
+            Finding(FINITE_COORDINATES, Severity.ERROR, entry, "no resolved atom has a non-zero coordinate")
         )
     for chain in np.unique(npz["chain_id"]):
         if not resolved[npz["chain_id"] == chain].any():
             findings.append(
                 Finding(
-                    "V5",
+                    FINITE_COORDINATES,
                     Severity.ERROR,
                     entry,
                     f"chain {chain} has no resolved atoms (all coordinates NaN)",
@@ -379,7 +391,7 @@ def _check_v5(ctx: ValidationContext, entry: str) -> list[Finding]:
         if problem:
             findings.append(
                 Finding(
-                    "V5",
+                    FINITE_COORDINATES,
                     Severity.ERROR,
                     entry,
                     f"{mol_id}.sdf: {problem}",
@@ -401,7 +413,7 @@ def check_v5_finite_coordinates(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings for bad coordinates.
     """
-    return _per_entry(ctx, "V5", _check_v5)
+    return _per_entry(ctx, FINITE_COORDINATES, _check_v5)
 
 
 def _check_v6(ctx: ValidationContext, entry: str) -> list[Finding]:
@@ -410,7 +422,7 @@ def _check_v6(ctx: ValidationContext, entry: str) -> list[Finding]:
             ctx.augmented_cif(entry), ctx.dataset_cache.structure_data[entry]
         )
     except ChainMismatchError as exc:
-        return [Finding("V6", Severity.ERROR, entry, str(exc))]
+        return [Finding(CACHE_MATCHES_STRUCTURE, Severity.ERROR, entry, str(exc))]
     return []
 
 
@@ -423,7 +435,7 @@ def check_v6_cache_matches_structure(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings carrying the mismatch message.
     """
-    return _per_entry(ctx, "V6", _check_v6)
+    return _per_entry(ctx, CACHE_MATCHES_STRUCTURE, _check_v6)
 
 
 def _check_v7(ctx: ValidationContext, entry: str) -> list[Finding]:
@@ -466,7 +478,7 @@ def _check_v7(ctx: ValidationContext, entry: str) -> list[Finding]:
         if problem:
             findings.append(
                 Finding(
-                    "V7",
+                    RESIDUE_NUMBERING,
                     Severity.ERROR,
                     entry,
                     f"chain {label}: {problem}",
@@ -485,4 +497,4 @@ def check_v7_residue_numbering(ctx: ValidationContext) -> list[Finding]:
     Returns:
         E findings, one per offending chain.
     """
-    return _per_entry(ctx, "V7", _check_v7)
+    return _per_entry(ctx, RESIDUE_NUMBERING, _check_v7)

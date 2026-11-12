@@ -11,6 +11,29 @@ from aw_of3_finetune.validate.alignments import (
     check_v16_template_dates,
     check_v17_release_date,
 )
+from aw_of3_finetune.validate.check_ids import (
+    ATOMS_MATCH_SOURCE,
+    CACHE_MATCHES_STRUCTURE,
+    CHAINS_ACCOUNTED,
+    DATASET_CACHE_READABLE,
+    DATASET_LOADS,
+    FINITE_COORDINATES,
+    HAS_LIGAND,
+    LIGANDS_NOT_IN_POLYMERS,
+    LIGAND_COPIES_SEPARATE,
+    MSA_QUERY_ROWS,
+    ONE_CHEMISTRY_PER_MOL_ID,
+    POLYMER_SEQUENCES,
+    REFERENCE_SDFS_EXIST,
+    REFERENCE_SDFS_SANITIZE,
+    RELEASE_DATE,
+    REP_IDS_BY_SEQUENCE,
+    RESIDUE_NUMBERING,
+    SDF_ATOM_NAMES_MATCH,
+    SDF_ELEMENTS_MATCH,
+    TEMPLATES_RESOLVE,
+    TEMPLATE_DATES,
+)
 from aw_of3_finetune.validate.context import ValidationContext
 from aw_of3_finetune.validate.dataset_load import check_v21_dataset_loads
 from aw_of3_finetune.validate.findings import Finding, Severity, ValidationReport
@@ -33,51 +56,51 @@ from aw_of3_finetune.validate.structure import (
 )
 
 CHECKS: dict[str, Callable[[ValidationContext], list[Finding]]] = {
-    "V1": check_v1_chains_accounted,
-    "V2": check_v2_polymer_sequences,
-    "V3": check_v3_atoms_match_source,
-    "V4": check_v4_ligand_present,
-    "V5": check_v5_finite_coordinates,
-    "V6": check_v6_cache_matches_structure,
-    "V7": check_v7_residue_numbering,
-    "V8": check_v8_reference_mols_exist,
-    "V9": check_v9_v10_ref_atoms_match_crystal,
-    "V10": check_v9_v10_ref_atoms_match_crystal,
-    "V11": check_v11_one_chemistry_per_mol_id,
-    "V12": check_v12_ref_mols_sanitize,
-    "V13": check_v13_msa_query_rows,
-    "V14": check_v14_rep_ids_by_sequence,
-    "V15": check_v15_templates_resolve,
-    "V16": check_v16_template_dates,
-    "V17": check_v17_release_date,
-    "V18": check_v18_ligands_not_in_polymers,
-    "V19": check_v19_ligand_copies_separate,
-    "V21": check_v21_dataset_loads,
+    CHAINS_ACCOUNTED: check_v1_chains_accounted,
+    POLYMER_SEQUENCES: check_v2_polymer_sequences,
+    ATOMS_MATCH_SOURCE: check_v3_atoms_match_source,
+    HAS_LIGAND: check_v4_ligand_present,
+    FINITE_COORDINATES: check_v5_finite_coordinates,
+    CACHE_MATCHES_STRUCTURE: check_v6_cache_matches_structure,
+    RESIDUE_NUMBERING: check_v7_residue_numbering,
+    REFERENCE_SDFS_EXIST: check_v8_reference_mols_exist,
+    SDF_ELEMENTS_MATCH: check_v9_v10_ref_atoms_match_crystal,
+    SDF_ATOM_NAMES_MATCH: check_v9_v10_ref_atoms_match_crystal,
+    ONE_CHEMISTRY_PER_MOL_ID: check_v11_one_chemistry_per_mol_id,
+    REFERENCE_SDFS_SANITIZE: check_v12_ref_mols_sanitize,
+    MSA_QUERY_ROWS: check_v13_msa_query_rows,
+    REP_IDS_BY_SEQUENCE: check_v14_rep_ids_by_sequence,
+    TEMPLATES_RESOLVE: check_v15_templates_resolve,
+    TEMPLATE_DATES: check_v16_template_dates,
+    RELEASE_DATE: check_v17_release_date,
+    LIGANDS_NOT_IN_POLYMERS: check_v18_ligands_not_in_polymers,
+    LIGAND_COPIES_SEPARATE: check_v19_ligand_copies_separate,
+    DATASET_LOADS: check_v21_dataset_loads,
 }
 
 
 # Short names for reports; the check functions' docstrings say exactly what each one tests.
 CHECK_TITLES: dict[str, str] = {
-    "V1": "Source chains kept or dropped for a known reason",
-    "V2": "Polymer sequences match the source",
-    "V3": "Atoms match the source CIF",
-    "V4": "Entry has a ligand",
-    "V5": "Coordinates are finite",
-    "V6": "Dataset cache matches the structure",
-    "V7": "Residue numbering matches the sequence",
-    "V8": "Every ligand has a reference SDF",
-    "V9": "Reference SDF elements match the crystal",
-    "V10": "Reference SDF atom names match the crystal",
-    "V11": "One chemistry per reference molecule",
-    "V12": "Reference SDFs sanitize in RDKit",
-    "V13": "MSA query row matches the chain sequence",
-    "V14": "Representative IDs follow the sequence",
-    "V15": "Template IDs resolve to structure files",
-    "V16": "Templates predate their entry",
-    "V17": "Entry has a real release date",
-    "V18": "Ligands are not inside polymer chains",
-    "V19": "Ligand copies stay in separate chains",
-    "V21": "Entry loads through OpenFold3's dataset",
+    CHAINS_ACCOUNTED: "Source chains kept or dropped for a known reason",
+    POLYMER_SEQUENCES: "Polymer sequences match the source",
+    ATOMS_MATCH_SOURCE: "Atoms match the source CIF",
+    HAS_LIGAND: "Entry has a ligand",
+    FINITE_COORDINATES: "Coordinates are finite",
+    CACHE_MATCHES_STRUCTURE: "Dataset cache matches the structure",
+    RESIDUE_NUMBERING: "Residue numbering matches the sequence",
+    REFERENCE_SDFS_EXIST: "Every ligand has a reference SDF",
+    SDF_ELEMENTS_MATCH: "Reference SDF elements match the crystal",
+    SDF_ATOM_NAMES_MATCH: "Reference SDF atom names match the crystal",
+    ONE_CHEMISTRY_PER_MOL_ID: "One chemistry per reference molecule",
+    REFERENCE_SDFS_SANITIZE: "Reference SDFs sanitize in RDKit",
+    MSA_QUERY_ROWS: "MSA query row matches the chain sequence",
+    REP_IDS_BY_SEQUENCE: "Representative IDs follow the sequence",
+    TEMPLATES_RESOLVE: "Template IDs resolve to structure files",
+    TEMPLATE_DATES: "Templates predate their entry",
+    RELEASE_DATE: "Entry has a real release date",
+    LIGANDS_NOT_IN_POLYMERS: "Ligands are not inside polymer chains",
+    LIGAND_COPIES_SEPARATE: "Ligand copies stay in separate chains",
+    DATASET_LOADS: "Entry loads through OpenFold3's dataset",
 }
 
 def run_validation(ctx: ValidationContext, checks: Iterable[str] | None = None) -> ValidationReport:
@@ -88,7 +111,7 @@ def run_validation(ctx: ValidationContext, checks: Iterable[str] | None = None) 
         checks: Check IDs to run; all registered checks when None.
 
     Returns:
-        Report; checks sharing a function (V9/V10) run once and only requested IDs are kept; unknown IDs raise ValueError; a check that raises becomes an E finding with ``entry=None``.
+        Report; checks sharing a function (V9 and V10, the reference SDF element and atom-name checks) run once and only requested IDs are kept; unknown IDs raise ValueError; a check that raises becomes an E finding with ``entry=None``.
     """
     ids = list(CHECKS) if checks is None else list(checks)
     unknown = [c for c in ids if c not in CHECKS]
@@ -109,7 +132,7 @@ def run_validation(ctx: ValidationContext, checks: Iterable[str] | None = None) 
         entries_in = ctx.entries()
     except Exception as exc:
         entries_in = []
-        findings.append(Finding("V0", Severity.ERROR, None, f"dataset cache unreadable: {exc}"))
+        findings.append(Finding(DATASET_CACHE_READABLE, Severity.ERROR, None, f"dataset cache unreadable: {exc}"))
     return ValidationReport(findings=findings, entries_in=entries_in)
 
 

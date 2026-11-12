@@ -4,13 +4,31 @@ The pipeline turns a directory of mmCIF files into everything OpenFold3 needs to
 
 ## The three steps
 
+`finetune-pipeline` runs these commands in the order the arrows show. Dashed boxes are stages that are optional or that a flag can skip.
+
+![The pipeline's commands in run order, in four groups: 1. Annotate, 2. Search, 3. Hand off and Check](../images/pipeline-overview.svg)
+
+| Stage | Runs when |
+|---|---|
+| `prepare-inputs` | You run it by hand, before the pipeline |
+| `import-msas` | `--msa-sources` is given |
+| `generate-msas` | `--organized-msa-dir` is given, without `--msa-sources` |
+| `fetch-templates`, `preprocess-templates` | `generate-msas` ran, and `--no-templates` is not given |
+| `split-dataset` | `--split-csv` is given |
+| `generate-train-config` | There is an MSA folder: one from step 2, or an `<output-dir>/organized_msas` left by an earlier run |
+| `validate-dataset` | `--skip-validation` is not given |
+| `finetune-report` | `--skip-report` is not given |
+
+Every other stage always runs.
+
 | Step | Commands | Output |
 |---|---|---|
-| **1. Annotate** | `finetune-prep` | Cleaned CIFs with OpenFold3 metadata, and reference molecules |
-| **2. Search** | `generate-msas`, `fetch-templates` | MSAs and template structures |
-| **3. Hand off** | `materialize-dataset-cache`, `preprocess-templates`, `generate-train-config` | The dataset cache, NPZ files and `train.yml` |
+| **1. Annotate** | `prepare-inputs` (optional), `finetune-prep` | Cleaned CIFs with OpenFold3 metadata, and reference molecules |
+| **2. Search** | `import-msas` or `generate-msas`, then `fetch-templates` | MSAs and template structures |
+| **3. Hand off** | `materialize-dataset-cache`, `preprocess-templates`, NPZ structure files, `split-dataset`, `generate-train-config` | The dataset cache, NPZ files and `train.yml` |
+| **Check** | `validate-dataset`, `finetune-report` | `validation.json` and `report/index.html` |
 
-`finetune-pipeline` runs all three, then validates the dataset and writes the report.
+`finetune-pipeline` runs all three, then validates the dataset and writes the report. `prepare-inputs` is never part of it: run it by hand first if your inputs need it.
 
 Keep the outputs of steps 1 and 2. Step 3 is only what OpenFold3's trainer needs, and you can rebuild it at any time.
 

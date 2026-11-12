@@ -1,4 +1,7 @@
-"""MSA, template and release-date checks V13-V17."""
+"""MSA, template and release-date checks (V13-V17).
+
+V13 MSA query rows, V14 rep IDs by sequence, V15 template files, V16 template dates, V17 release date.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +16,13 @@ from openfold3.projects.of3_all_atom.config.dataset_config_components import MSA
 
 from aw_of3_finetune.constants import PREPARE_RECORD_FILE, TEMPLATE_CUTOFF_FILENAME, TEMPLATE_CUTOFF_NOTE
 from aw_of3_finetune.msa import alignment_rep_id
+from aw_of3_finetune.validate.check_ids import (
+    MSA_QUERY_ROWS,
+    RELEASE_DATE,
+    REP_IDS_BY_SEQUENCE,
+    TEMPLATES_RESOLVE,
+    TEMPLATE_DATES,
+)
 from aw_of3_finetune.validate.context import ValidationContext
 from aw_of3_finetune.validate.findings import Finding, Severity
 from aw_of3_finetune.validate.structure import _entity_sequences, _per_entry
@@ -77,19 +87,19 @@ def _msa_query_row_findings(ctx: ValidationContext, entry: str, read_by_train_ym
         a3ms = sorted(rep_dir.glob("*.a3m")) if rep_dir.is_dir() else []
         if not a3ms:
             findings.append(
-                Finding("V13", Severity.ERROR, entry, f"chain {key}: missing {rep_dir}/<source>.a3m",
+                Finding(MSA_QUERY_ROWS, Severity.ERROR, entry, f"chain {key}: missing {rep_dir}/<source>.a3m",
                         {"chain": key, "rep_id": rep_id})
             )  # fmt: skip
         for path in a3ms:
             detail = {"chain": key, "rep_id": rep_id, "source": path.stem}
             if _first_a3m_sequence(path) != sequence:
                 findings.append(
-                    Finding("V13", Severity.ERROR, entry,
+                    Finding(MSA_QUERY_ROWS, Severity.ERROR, entry,
                             f"chain {key}: first MSA row differs from chain sequence ({path.name})", detail)
                 )  # fmt: skip
             if read_by_train_yml is not None and path.stem not in read_by_train_yml:
                 findings.append(
-                    Finding("V13", Severity.ERROR, entry,
+                    Finding(MSA_QUERY_ROWS, Severity.ERROR, entry,
                             f"chain {key}: {path.name} is never read by train.yml (not in its msa "
                             "max_seq_counts and aln_order); regenerate train.yml with generate-train-config",
                             detail)
@@ -110,9 +120,9 @@ def check_v13_msa_query_rows(ctx: ValidationContext) -> list[Finding]:
         E findings for missing, mismatched or unread MSAs; one INFO when there is no MSA folder.
     """
     if ctx.msa_dir is None:
-        return [Finding("V13", Severity.INFO, None, "skipped: no --organized-msa-dir")]
+        return [Finding(MSA_QUERY_ROWS, Severity.INFO, None, "skipped: no --organized-msa-dir")]
     read_by_train_yml = _sources_read_by_train_yml(ctx)
-    return _per_entry(ctx, "V13", lambda c, e: _msa_query_row_findings(c, e, read_by_train_yml))
+    return _per_entry(ctx, MSA_QUERY_ROWS, lambda c, e: _msa_query_row_findings(c, e, read_by_train_yml))
 
 
 def check_v14_rep_ids_by_sequence(ctx: ValidationContext) -> list[Finding]:
@@ -134,19 +144,19 @@ def check_v14_rep_ids_by_sequence(ctx: ValidationContext) -> list[Finding]:
             if rep_id != expected:
                 findings.append(
                     Finding(
-                        "V14", Severity.ERROR, entry,
+                        REP_IDS_BY_SEQUENCE, Severity.ERROR, entry,
                         f"chain {key}: rep_id {rep_id} != hash of sequence ({expected})",
                         {"chain": key, "rep_id": rep_id, "expected": expected},
                     )
                 )  # fmt: skip
         return findings
 
-    findings = _per_entry(ctx, "V14", one)
+    findings = _per_entry(ctx, REP_IDS_BY_SEQUENCE, one)
     for rep_id, seqs in owners.items():
         if len(seqs) > 1:
             findings.append(
                 Finding(
-                    "V14", Severity.ERROR, None,
+                    REP_IDS_BY_SEQUENCE, Severity.ERROR, None,
                     f"rep_id {rep_id} shared by {len(seqs)} different sequences",
                     {"rep_id": rep_id, "entries": sorted(seqs.values())},
                 )
@@ -167,7 +177,7 @@ def _check_v15(ctx: ValidationContext, entry: str) -> list[Finding]:
         if not ((root / pdb / f"{tid}.npz").exists() or (root / f"{pdb}.cif").exists()):
             findings.append(
                 Finding(
-                    "V15", Severity.ERROR, entry,
+                    TEMPLATES_RESOLVE, Severity.ERROR, entry,
                     f"chain {key}: template {tid} has no structure in {root}",
                     {"chain": key, "template_id": tid},
                 )
@@ -185,10 +195,10 @@ def check_v15_templates_resolve(ctx: ValidationContext) -> list[Finding]:
         E findings for unresolved IDs; one INFO if there are no template IDs or no structure dir.
     """
     if not any(_template_ids(ctx, e) for e in ctx.entries()):
-        return [Finding("V15", Severity.INFO, None, "no template IDs in dataset")]
+        return [Finding(TEMPLATES_RESOLVE, Severity.INFO, None, "no template IDs in dataset")]
     if ctx.template_structure_dir is None:
-        return [Finding("V15", Severity.INFO, None, "skipped: no --template-structure-dir")]
-    return _per_entry(ctx, "V15", _check_v15)
+        return [Finding(TEMPLATES_RESOLVE, Severity.INFO, None, "skipped: no --template-structure-dir")]
+    return _per_entry(ctx, TEMPLATES_RESOLVE, _check_v15)
 
 
 def _date_part(value) -> date:
@@ -212,7 +222,7 @@ def _check_v16(ctx: ValidationContext, entry: str, cutoff: date | None) -> list[
     try:
         entry_date = _date_part(data.release_date)
     except (ValueError, TypeError):
-        return [Finding("V16", Severity.ERROR, entry, "cannot check template dates: entry release_date missing")]
+        return [Finding(TEMPLATE_DATES, Severity.ERROR, entry, "cannot check template dates: entry release_date missing")]
     findings = []
     caches: dict[str, dict] = {}
     for key, chain, tid in listed:
@@ -227,7 +237,7 @@ def _check_v16(ctx: ValidationContext, entry: str, cutoff: date | None) -> list[
         if info is None or not info.get("release_date"):
             findings.append(
                 Finding(
-                    "V16", Severity.ERROR, entry,
+                    TEMPLATE_DATES, Severity.ERROR, entry,
                     f"chain {key}: cannot check template date: {tid} has no release_date in {path}",
                     {"chain": key, "template_id": tid},
                 )
@@ -238,7 +248,7 @@ def _check_v16(ctx: ValidationContext, entry: str, cutoff: date | None) -> list[
             if _date_part(released) >= cutoff:
                 findings.append(
                     Finding(
-                        "V16", Severity.ERROR, entry,
+                        TEMPLATE_DATES, Severity.ERROR, entry,
                         f"chain {key}: template {tid} released {released}, not before the template cutoff {cutoff}",
                         {"chain": key, "template_id": tid, "template_date": released, "cutoff": str(cutoff)},
                     )
@@ -246,7 +256,7 @@ def _check_v16(ctx: ValidationContext, entry: str, cutoff: date | None) -> list[
         elif _date_part(released) >= entry_date:
             findings.append(
                 Finding(
-                    "V16", Severity.ERROR, entry,
+                    TEMPLATE_DATES, Severity.ERROR, entry,
                     f"chain {key}: template {tid} released {released}, not before entry {entry_date}",
                     {"chain": key, "template_id": tid, "template_date": released, "entry_date": str(entry_date)},
                 )
@@ -266,14 +276,14 @@ def check_v16_template_dates(ctx: ValidationContext) -> list[Finding]:
     """
     if ctx.template_cache_dir is None:
         if any(_template_ids(ctx, e) for e in ctx.entries()):
-            return [Finding("V16", Severity.INFO, None, "skipped: no --template-cache-dir")]
+            return [Finding(TEMPLATE_DATES, Severity.INFO, None, "skipped: no --template-cache-dir")]
         return []
     cutoff = _template_cutoff(ctx)
-    findings = _per_entry(ctx, "V16", lambda ctx, entry: _check_v16(ctx, entry, cutoff))
+    findings = _per_entry(ctx, TEMPLATE_DATES, lambda ctx, entry: _check_v16(ctx, entry, cutoff))
     if cutoff is None:
         return findings
     note = f"{TEMPLATE_CUTOFF_NOTE} {cutoff}, not each structure's release date"
-    return [Finding("V16", Severity.INFO, None, note), *findings]
+    return [Finding(TEMPLATE_DATES, Severity.INFO, None, note), *findings]
 
 
 def _defaulted_entries(ctx: ValidationContext) -> tuple[set[str], list[Finding]]:
@@ -288,7 +298,7 @@ def _defaulted_entries(ctx: ValidationContext) -> tuple[set[str], list[Finding]]
     record_path = ctx.cif_dir / PREPARE_RECORD_FILE
 
     def malformed(problem: str) -> tuple[set[str], list[Finding]]:
-        return set(), [Finding("V17", Severity.WARNING, None, f"{PREPARE_RECORD_FILE} is {problem}; ignored")]
+        return set(), [Finding(RELEASE_DATE, Severity.WARNING, None, f"{PREPARE_RECORD_FILE} is {problem}; ignored")]
 
     if not record_path.is_file():
         return set(), []
@@ -308,11 +318,11 @@ def _check_v17(ctx: ValidationContext, entry: str, defaulted: set[str]) -> list[
     released = str(ctx.dataset_cache.structure_data[entry].release_date or "")
     if released and entry.lower() in defaulted:
         message = f"release_date defaulted by prepare-inputs: {released}"
-        return [Finding("V17", Severity.WARNING, entry, message, {"release_date": released})]
+        return [Finding(RELEASE_DATE, Severity.WARNING, entry, message, {"release_date": released})]
     if released and released != PLACEHOLDER_RELEASE_DATE:
         return []
     shown = released or "missing"
-    return [Finding("V17", Severity.WARNING, entry, f"release_date is {shown}", {"release_date": released})]
+    return [Finding(RELEASE_DATE, Severity.WARNING, entry, f"release_date is {shown}", {"release_date": released})]
 
 
 def check_v17_release_date(ctx: ValidationContext) -> list[Finding]:
@@ -325,4 +335,4 @@ def check_v17_release_date(ctx: ValidationContext) -> list[Finding]:
         W findings for missing, placeholder or prepare-inputs-defaulted dates.
     """
     defaulted, record_findings = _defaulted_entries(ctx)
-    return record_findings + _per_entry(ctx, "V17", lambda c, entry: _check_v17(c, entry, defaulted))
+    return record_findings + _per_entry(ctx, RELEASE_DATE, lambda c, entry: _check_v17(c, entry, defaulted))

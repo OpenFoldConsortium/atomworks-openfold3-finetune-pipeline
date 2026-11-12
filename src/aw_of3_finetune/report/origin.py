@@ -27,13 +27,13 @@ from aw_of3_finetune.report.validity.ligands import (
     _nearby_protein,
 )
 from aw_of3_finetune.steplog import read_input_atoms
+from aw_of3_finetune.validate.check_ids import RELEASE_DATE as RELEASE_DATE_CHECK
 
 INPUT = "input"
 PROCESSING = "processing"
 NOT_CHECKED = "not_checked"
 
 _REASONS = {INPUT: "already in the input CIF", NOT_CHECKED: "check could not run"}
-RELEASE_DATE_CHECK = "V17"
 _LIGAND_CHECKS = (LIGAND_CHEMISTRY, LIGAND_IDENTITY, LIGAND_GEOMETRY, LIGAND_CONTACTS)
 
 
@@ -157,7 +157,7 @@ def v_check_origin(inputs: ValidityInputs, item: dict) -> str:
         item: A validation.json finding (check, severity, entry, message, detail).
 
     Returns:
-        INPUT for a V17 release-date warning whose date is the input CIF's own (e.g. a 1970-01-01
+        INPUT for a V17 (real release date) warning whose date is the input CIF's own (e.g. a 1970-01-01
         placeholder there); PROCESSING for every other finding, or when the input cannot be read.
     """
     if item["check"] != RELEASE_DATE_CHECK or item["entry"] is None:

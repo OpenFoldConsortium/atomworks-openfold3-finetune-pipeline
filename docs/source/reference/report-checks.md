@@ -15,6 +15,7 @@ These run in the `validate` stage. An error stops the pipeline with exit code 1,
 
 | Check | Area | What it confirms |
 |---|---|---|
+| V0 | Dataset | The dataset cache can be read. If it cannot, no other check has entries to look at |
 | V1 | Structure | Every source chain is in the output, or dropped for a known reason |
 | V2 | Structure | Each output polymer sequence equals the source's |
 | V3 | Structure | Every resolved heavy atom has a same-named source atom within 0.001 Å |

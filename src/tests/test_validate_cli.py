@@ -7,6 +7,7 @@ import yaml
 from click.testing import CliRunner
 from openfold3.core.data.io.dataset_cache import read_datacache
 
+from aw_of3_finetune.validate.check_ids import DATASET_LOADS, FINITE_COORDINATES
 from aw_of3_finetune import cli as cli_module
 from aw_of3_finetune import validate as validate_pkg
 from aw_of3_finetune.cli import finetune_pipeline, split_dataset, validate
@@ -201,9 +202,9 @@ def test_report_written_when_validate_fails(cif_protein_monomer, ccd_path, tmp_p
     out = tmp_path / "out"
 
     def always_error(ctx):
-        return [validate_pkg.Finding("V5", validate_pkg.Severity.ERROR, "3u8v", "forced error")]
+        return [validate_pkg.Finding(FINITE_COORDINATES, validate_pkg.Severity.ERROR, "3u8v", "forced error")]
 
-    monkeypatch.setitem(validate_pkg.CHECKS, "V5", always_error)
+    monkeypatch.setitem(validate_pkg.CHECKS, FINITE_COORDINATES, always_error)
 
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
@@ -244,9 +245,9 @@ def test_report_crash_keeps_validate_failure(cif_protein_monomer, ccd_path, tmp_
     out = tmp_path / "out"
 
     def always_error(ctx):
-        return [validate_pkg.Finding("V5", validate_pkg.Severity.ERROR, "3u8v", "forced error")]
+        return [validate_pkg.Finding(FINITE_COORDINATES, validate_pkg.Severity.ERROR, "3u8v", "forced error")]
 
-    monkeypatch.setitem(validate_pkg.CHECKS, "V5", always_error)
+    monkeypatch.setitem(validate_pkg.CHECKS, FINITE_COORDINATES, always_error)
     monkeypatch.setattr(cli_module, "write_user_report", _boom_report)
 
     result = CliRunner().invoke(finetune_pipeline, [
@@ -285,7 +286,7 @@ def test_allow_errors_does_not_hide_dataset_level_errors(built_dataset, ccd_path
     def boom(ctx):
         raise RuntimeError("boom")
 
-    monkeypatch.setitem(validate_pkg.CHECKS, "V5", boom)
+    monkeypatch.setitem(validate_pkg.CHECKS, FINITE_COORDINATES, boom)
 
     result = CliRunner().invoke(
         validate, _args(built, ccd_path, "--allow-errors"), catch_exceptions=False
@@ -411,7 +412,7 @@ def test_validate_rejects_nonexistent_msa_dir(built_dataset, ccd_path, tmp_path)
     assert "--organized-msa-dir" in result.output
 
 
-def test_validate_skip_dataset_load_records_v21_info(built_dataset, ccd_path, tmp_path):
+def test_validate_skip_dataset_load_records_an_info_finding(built_dataset, ccd_path, tmp_path):
     """--skip-dataset-load leaves a single dataset-wide V21 INFO finding saying it was skipped."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -419,8 +420,8 @@ def test_validate_skip_dataset_load_records_v21_info(built_dataset, ccd_path, tm
 
     assert result.exit_code == 0
     report = json.loads((built.output_dir / "validation.json").read_text())
-    v21_findings = [f for f in report["findings"] if f["check"] == "V21"]
-    actual_v21 = [(f["severity"], f["entry"], f["message"]) for f in v21_findings]
+    dataset_load_findings = [f for f in report["findings"] if f["check"] == DATASET_LOADS]
+    actual_v21 = [(f["severity"], f["entry"], f["message"]) for f in dataset_load_findings]
     assert actual_v21 == [("I", None, "skipped: --skip-dataset-load")]
 
 
@@ -439,8 +440,8 @@ def test_finetune_pipeline_skip_dataset_load(cif_protein_monomer, ccd_path, tmp_
 
     assert result.exit_code == 0, result.output
     report = json.loads((tmp_path / "out" / "validation.json").read_text())
-    v21_messages = [f["message"] for f in report["findings"] if f["check"] == "V21"]
-    assert v21_messages == ["skipped: --skip-dataset-load"]
+    dataset_load_messages = [f["message"] for f in report["findings"] if f["check"] == DATASET_LOADS]
+    assert dataset_load_messages == ["skipped: --skip-dataset-load"]
 
 
 def _split_with_train_yml(built, tmp_path, csv_text):

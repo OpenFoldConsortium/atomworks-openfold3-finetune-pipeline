@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from aw_of3_finetune.validate.check_ids import CHAINS_ACCOUNTED
+
 
 class Severity(str, Enum):
     """Severity of a finding: error, warning or info."""
@@ -19,7 +21,7 @@ class Severity(str, Enum):
 
 @dataclass(frozen=True)
 class Finding:
-    """One validation result; ``check`` is the check ID such as ``"V3"``."""
+    """One validation result; ``check`` is a check ID from ``check_ids``, such as V3 (atoms match the source CIF)."""
 
     check: str
     severity: Severity
@@ -78,13 +80,13 @@ class ValidationReport:
         Path(path).write_text(json.dumps(data, indent=2))
 
     def summary_text(self) -> str:
-        """Return entries in/out, findings tallied by check and severity, and V1 drop reasons."""
+        """Return entries in/out, findings tallied by check and severity, and V1 (chains accounted for) drop reasons."""
         lines = [f"entries: {len(self.entries_in)} in → {len(self.entries_out)} out"]
         tally = Counter((f.check, f.severity.value) for f in self.findings)
         for (check, sev), n in sorted(tally.items()):
             lines.append(f"{check}  {sev} {n}")
-        drops = Counter(f.message for f in self.findings if f.check == "V1")
+        drops = Counter(f.message for f in self.findings if f.check == CHAINS_ACCOUNTED)
         if drops:
-            lines.append("drop reasons (V1):")
+            lines.append(f"drop reasons ({CHAINS_ACCOUNTED}):")
             lines.extend(f"  {n}  {reason}" for reason, n in drops.most_common())
         return "\n".join(lines)

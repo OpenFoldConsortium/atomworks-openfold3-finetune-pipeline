@@ -1,4 +1,4 @@
-"""Tests for the MSA, template and release-date checks V13-V17."""
+"""Tests for the MSA, template and release-date checks (V13-V17)."""
 
 import json
 
@@ -175,7 +175,7 @@ def test_paired_on_source_counts_as_read(built_dataset, tmp_path):
     assert report.errors == []
 
 
-def test_v14_detects_rep_id_mismatch(built_dataset, tmp_path):
+def test_rep_id_not_matching_sequence_is_an_error(built_dataset, tmp_path):
     """V14 errors when a representative id is not the hash of the chain's sequence."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -188,13 +188,13 @@ def test_v14_detects_rep_id_mismatch(built_dataset, tmp_path):
     report = run_validation(context(built), ["V14"])
 
     # One error on 2crb, naming the wrong id and what it should have been.
-    v14_findings = _hits(report, "V14", "2crb")
-    assert len(v14_findings) == 1
-    assert "00000000000" in v14_findings[0].message
-    assert "hash of sequence" in v14_findings[0].message
+    rep_id_findings = _hits(report, "V14", "2crb")
+    assert len(rep_id_findings) == 1
+    assert "00000000000" in rep_id_findings[0].message
+    assert "hash of sequence" in rep_id_findings[0].message
 
 
-def test_v14_detects_rep_id_shared_by_two_sequences(built_dataset, tmp_path):
+def test_rep_id_shared_by_two_sequences_is_an_error(built_dataset, tmp_path):
     """V14 flags one representative id used for two different sequences (2crb and 1a3n)."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -211,7 +211,7 @@ def test_v14_detects_rep_id_shared_by_two_sequences(built_dataset, tmp_path):
     assert any("shared by 2 different sequences" in message for message in messages)
 
 
-def test_v15_v16(built_dataset, tmp_path):
+def test_template_files_and_dates_are_checked(built_dataset, tmp_path):
     """With template dirs given, a template missing from disk (V15) and one released after the entry (V16) are errors."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -245,18 +245,18 @@ def test_v15_v16(built_dataset, tmp_path):
     report = run_validation(ctx, ["V15", "V16"])
 
     # V15: only 9bbb_A is missing its structure.
-    v15_findings = _hits(report, "V15", "2crb")
-    assert len(v15_findings) == 1
-    assert "9bbb_A has no structure" in v15_findings[0].message
+    template_file_findings = _hits(report, "V15", "2crb")
+    assert len(template_file_findings) == 1
+    assert "9bbb_A has no structure" in template_file_findings[0].message
 
     # V16: only 9bbb_A is newer than the entry.
-    v16_findings = _hits(report, "V16", "2crb")
-    assert len(v16_findings) == 1
-    assert "9bbb_A released" in v16_findings[0].message
+    template_date_findings = _hits(report, "V16", "2crb")
+    assert len(template_date_findings) == 1
+    assert "9bbb_A released" in template_date_findings[0].message
 
     # Both are errors.
-    assert v15_findings[0].severity == Severity.ERROR
-    assert v16_findings[0].severity == Severity.ERROR
+    assert template_file_findings[0].severity == Severity.ERROR
+    assert template_date_findings[0].severity == Severity.ERROR
 
 
 def _v16_with_cutoff(built_dataset, tmp_path, cutoff: str) -> list:
@@ -280,7 +280,7 @@ def _v16_with_cutoff(built_dataset, tmp_path, cutoff: str) -> list:
     return run_validation(context(built, template_cache_dir=cache_dir), ["V16"]).findings
 
 
-def test_v16_allows_a_template_before_the_cutoff(built_dataset, tmp_path):
+def test_template_before_the_cutoff_is_allowed(built_dataset, tmp_path):
     actual_findings = _v16_with_cutoff(built_dataset, tmp_path, "2100-01-01")
 
     actual_severities = [finding.severity for finding in actual_findings]
@@ -288,7 +288,7 @@ def test_v16_allows_a_template_before_the_cutoff(built_dataset, tmp_path):
     assert "2100-01-01" in actual_findings[0].message
 
 
-def test_v16_rejects_a_template_after_the_cutoff(built_dataset, tmp_path):
+def test_template_after_the_cutoff_is_an_error(built_dataset, tmp_path):
     actual_findings = _v16_with_cutoff(built_dataset, tmp_path, "1900-01-01")
 
     actual_errors = [finding for finding in actual_findings if finding.severity == Severity.ERROR]
@@ -296,7 +296,7 @@ def test_v16_rejects_a_template_after_the_cutoff(built_dataset, tmp_path):
     assert "not before the template cutoff 1900-01-01" in actual_errors[0].message
 
 
-def test_v15_v16_skip_without_dirs(built_dataset, tmp_path):
+def test_template_checks_skip_without_dirs(built_dataset, tmp_path):
     """Without template dirs, V15 and V16 only emit INFO notes and no errors."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -311,7 +311,7 @@ def test_v15_v16_skip_without_dirs(built_dataset, tmp_path):
     assert [f.severity for f in report.findings] == [Severity.INFO, Severity.INFO]
 
 
-def test_v17_flags_placeholder_date(built_dataset, tmp_path):
+def test_placeholder_release_date_is_flagged(built_dataset, tmp_path):
     """V17 warns (not errors) about a 1970-01-01 placeholder release date."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -322,10 +322,10 @@ def test_v17_flags_placeholder_date(built_dataset, tmp_path):
 
     report = run_validation(context(built), ["V17"])
 
-    v17_findings = _hits(report, "V17", "2crb")
-    assert len(v17_findings) == 1
-    assert v17_findings[0].severity == Severity.WARNING
-    assert "1970-01-01" in v17_findings[0].message
+    release_date_findings = _hits(report, "V17", "2crb")
+    assert len(release_date_findings) == 1
+    assert release_date_findings[0].severity == Severity.WARNING
+    assert "1970-01-01" in release_date_findings[0].message
     assert report.errors == []
 
 
@@ -339,7 +339,7 @@ def _set_release_date(built, entry, release_date):
     _edit_cache(built, lambda structure_data: structure_data[entry].update(release_date=release_date))
 
 
-def test_v17_flags_entry_defaulted_by_prepare_inputs(built_dataset, tmp_path):
+def test_release_date_defaulted_by_prepare_inputs_is_flagged(built_dataset, tmp_path):
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _set_release_date(built, "2crb", "2026-01-01")
     _write_prepare_record(built, ["2crb"])
@@ -352,7 +352,7 @@ def test_v17_flags_entry_defaulted_by_prepare_inputs(built_dataset, tmp_path):
     assert report.errors == []
 
 
-def test_v17_defaulted_stem_matches_entry_case_insensitively(built_dataset, tmp_path):
+def test_defaulted_release_date_stem_matches_entry_case_insensitively(built_dataset, tmp_path):
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _set_release_date(built, "2crb", "2026-01-01")
     _write_prepare_record(built, ["2CRB"])
@@ -363,7 +363,7 @@ def test_v17_defaulted_stem_matches_entry_case_insensitively(built_dataset, tmp_
     assert actual_messages == ["release_date defaulted by prepare-inputs: 2026-01-01"]
 
 
-def test_v17_ignores_entries_not_listed_as_defaulted(built_dataset, tmp_path):
+def test_release_date_check_ignores_entries_not_listed_as_defaulted(built_dataset, tmp_path):
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _set_release_date(built, "2crb", "2020-05-05")
     _write_prepare_record(built, ["other"])
@@ -373,7 +373,7 @@ def test_v17_ignores_entries_not_listed_as_defaulted(built_dataset, tmp_path):
     assert _hits(report, "V17", "2crb") == []
 
 
-def test_v17_without_a_prepare_record_keeps_the_real_date_clean(built_dataset, tmp_path):
+def test_real_release_date_is_clean_without_a_prepare_record(built_dataset, tmp_path):
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _set_release_date(built, "2crb", "2026-01-01")
 
@@ -382,7 +382,7 @@ def test_v17_without_a_prepare_record_keeps_the_real_date_clean(built_dataset, t
     assert _hits(report, "V17", "2crb") == []
 
 
-def test_v17_defaulted_and_placeholder_date_gives_one_finding(built_dataset, tmp_path):
+def test_defaulted_placeholder_release_date_gives_one_finding(built_dataset, tmp_path):
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _set_release_date(built, "2crb", "1970-01-01")
     _write_prepare_record(built, ["2crb"])
@@ -400,7 +400,7 @@ def test_v17_defaulted_and_placeholder_date_gives_one_finding(built_dataset, tmp
         ('{"release_date_defaulted": "2crb"}', "release_date_defaulted is not a list of strings"),
     ],
 )
-def test_v17_malformed_prepare_record_warns_once_and_carries_on(built_dataset, tmp_path, text, problem):
+def test_malformed_prepare_record_warns_once_and_carries_on(built_dataset, tmp_path, text, problem):
     built = mutable_copy(built_dataset, tmp_path / "copy")
     _set_release_date(built, "2crb", "2020-05-05")
     (built.cif_dir / PREPARE_RECORD_FILE).write_text(text)
@@ -435,19 +435,19 @@ def _with_templates(built, tmp_path, template_ids, cache=None, entry_date=None):
     return context(built, template_cache_dir=cache_dir)
 
 
-def test_v16_errors_when_cache_npz_missing(built_dataset, tmp_path):
+def test_template_dates_error_when_cache_npz_missing(built_dataset, tmp_path):
     """V16 errors when the chain lists templates but the template cache has no file for it."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     ctx = _with_templates(built, tmp_path, ["9aaa_A"])
 
-    v16_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
+    template_date_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
 
-    assert len(v16_findings) == 1
-    assert v16_findings[0].severity == Severity.ERROR
-    assert "cannot check template date" in v16_findings[0].message
+    assert len(template_date_findings) == 1
+    assert template_date_findings[0].severity == Severity.ERROR
+    assert "cannot check template date" in template_date_findings[0].message
 
 
-def test_v16_errors_when_listed_template_has_no_date(built_dataset, tmp_path):
+def test_template_dates_error_when_listed_template_has_no_date(built_dataset, tmp_path):
     """V16 errors when the template cache lacks a date for a listed template (9aaa_A)."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
 
@@ -455,36 +455,36 @@ def test_v16_errors_when_listed_template_has_no_date(built_dataset, tmp_path):
     cache = {"9zzz_A": {"index": 0, "release_date": "1990-01-01"}}
     ctx = _with_templates(built, tmp_path, ["9aaa_A"], cache)
 
-    v16_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
+    template_date_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
 
-    assert len(v16_findings) == 1
-    assert "cannot check template date" in v16_findings[0].message
-    assert "9aaa_A" in v16_findings[0].message
+    assert len(template_date_findings) == 1
+    assert "cannot check template date" in template_date_findings[0].message
+    assert "9aaa_A" in template_date_findings[0].message
 
 
-def test_v16_ignores_missing_entry_date_without_templates(built_dataset, tmp_path):
+def test_template_dates_ignore_missing_entry_date_without_templates(built_dataset, tmp_path):
     """An entry with no templates needs no release date, so a blank date is not an error."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     ctx = _with_templates(built, tmp_path, [], entry_date="")
 
-    v16_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
+    template_date_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
 
-    assert v16_findings == []
+    assert template_date_findings == []
 
 
-def test_v16_errors_on_missing_entry_date_with_templates(built_dataset, tmp_path):
+def test_template_dates_error_on_missing_entry_date_with_templates(built_dataset, tmp_path):
     """With templates listed, a blank entry release date can't be compared and is an error."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     cache = {"9aaa_A": {"index": 0, "release_date": "1990-01-01"}}
     ctx = _with_templates(built, tmp_path, ["9aaa_A"], cache, entry_date="")
 
-    v16_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
+    template_date_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
 
-    assert len(v16_findings) == 1
-    assert "entry release_date missing" in v16_findings[0].message
+    assert len(template_date_findings) == 1
+    assert "entry release_date missing" in template_date_findings[0].message
 
 
-def test_v16_accepts_datetime_strings(built_dataset, tmp_path):
+def test_template_dates_accept_datetime_strings(built_dataset, tmp_path):
     """V16 parses full datetime strings; only the template released at/after the entry is flagged."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     cache = {
@@ -493,8 +493,8 @@ def test_v16_accepts_datetime_strings(built_dataset, tmp_path):
     }
     ctx = _with_templates(built, tmp_path, ["9aaa_A", "9bbb_A"], cache, "2020-01-01T08:00:00")
 
-    v16_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
+    template_date_findings = _hits(run_validation(ctx, ["V16"]), "V16", "2crb")
 
     # 9aaa_A predates the entry (OK); 9bbb_A is released the same day (flagged).
-    assert len(v16_findings) == 1
-    assert "9bbb_A released" in v16_findings[0].message
+    assert len(template_date_findings) == 1
+    assert "9bbb_A released" in template_date_findings[0].message

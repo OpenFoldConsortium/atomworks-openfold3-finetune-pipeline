@@ -9,6 +9,7 @@ from openfold3.core.data.framework.single_datasets.dataset_utils import check_in
 from openfold3.projects.of3_all_atom.config.dataset_configs import DATASET_CONFIG_REGISTRY
 
 from aw_of3_finetune.training_config import MSA_SETTINGS, build_dataset_paths
+from aw_of3_finetune.validate.check_ids import DATASET_LOADS
 from aw_of3_finetune.validate.context import ValidationContext
 from aw_of3_finetune.validate.findings import Finding, Severity
 
@@ -28,7 +29,8 @@ def check_v21_dataset_loads(ctx: ValidationContext) -> list[Finding]:
         One E per entry whose first row fails (crops are off, so one row covers the entry); one INFO when there is no msa_dir.
     """
     if ctx.msa_dir is None:
-        return [Finding("V21", Severity.INFO, None, "skipped: no --organized-msa-dir (OF3 requires an alignments directory)")]
+        message = "skipped: no --organized-msa-dir (OF3 requires an alignments directory)"
+        return [Finding(DATASET_LOADS, Severity.INFO, None, message)]
     paths = build_dataset_paths(ctx.output_dir, ctx.msa_dir)["weighted-pdb"]
     paths["dataset_cache_file"] = str(ctx.cache_path)
     paths["target_structures_directory"] = str(ctx.npz_dir)
@@ -49,6 +51,6 @@ def check_v21_dataset_loads(ctx: ValidationContext) -> list[Finding]:
             check_invalid_feature_dict(dataset[i])
         except Exception as exc:
             failed[entry] = Finding(
-                "V21", Severity.ERROR, entry, f"{type(exc).__name__}: {exc}", {"row": i}
+                DATASET_LOADS, Severity.ERROR, entry, f"{type(exc).__name__}: {exc}", {"row": i}
             )
     return list(failed.values())
