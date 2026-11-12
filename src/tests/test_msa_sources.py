@@ -3,17 +3,28 @@
 Test structure
 --------------
 TestLoadManifest    sources manifest (YAML/JSON): directories, globs, source-name rules.
+TestScanSources     per-file checks before import: query match, duplicates, OF3 format.
 """
 
 from __future__ import annotations
 
+import gzip
 import json
 from pathlib import Path
 
 import pytest
 import yaml
 
-from aw_of3_finetune.msa_sources import MsaSourcesError, load_msa_sources_manifest
+from aw_of3_finetune.msa import alignment_rep_id
+from aw_of3_finetune.msa_sources import (
+    MsaSourcesError,
+    SourceSpec,
+    load_msa_sources_manifest,
+    scan_sources,
+)
+
+SEQ_A = "MKTAYIAKQRQISFVKSHFSRQ"
+SEQ_B = "GSHMLEDPVDAFQLWLKEQ"
 
 
 def _touch(path: Path, text: str = ">q\nAAA\n") -> Path:
@@ -133,3 +144,156 @@ class TestLoadManifest:
 
         assert "does_not_exist" in str(error.value)
         assert "dummy" in str(error.value)
+
+
+def _a3m(query: str, rows: list[tuple[str, str]] = ()) -> str:
+    """A3M text: the query (header 'query') then (header, aligned sequence) rows."""
+    return "".join(f">{h}\n{seq}\n" for h, seq in [("query", query), *rows])
+
+
+def _spec(name: str, *files: Path) -> SourceSpec:
+    """A manifest entry selecting exactly these files."""
+    return SourceSpec(name=name, spec="(test)", files=sorted(files))
+
+
+def _queries(*seqs: str) -> dict[str, str]:
+    """rep_id -> sequence, as collect_msa_queries returns."""
+    return {alignment_rep_id(s): s for s in seqs}
+
+
+def _store_file(store_root: Path, source: str, seq: str, text: str) -> Path:
+    """Write an existing store file (as a previous import would) for seq."""
+    rep_id = alignment_rep_id(seq)
+    path = store_root / source / rep_id[:2] / f"{rep_id}.a3m.gz"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(path, "wt") as f:
+        f.write(text)
+    return path
+
+
+class TestScanSources:
+    def test_matched_file_has_rep_id(self, tmp_path):
+        f = _touch(tmp_path / "a.a3m", _a3m(SEQ_A))
+
+        scan = scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert scan[0].source == "s"
+        assert scan[0].files[0].rep_id == alignment_rep_id(SEQ_A)
+        assert scan[0].files[0].path == f
+        assert scan[0].unmatched == []
+
+    def test_unmatched_file_listed(self, tmp_path):
+        """A file whose query is not in the dataset is listed, not an error."""
+        f = _touch(tmp_path / "b.a3m", _a3m(SEQ_B))
+
+        scan = scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert scan[0].unmatched == [f]
+
+    def test_query_with_insertions_is_unmatched(self, tmp_path):
+        """A query row with lowercase or gaps does not hash to the chain: reported unmatched by filename."""
+        lower = _touch(tmp_path / "lower.a3m", _a3m(SEQ_A[:5] + "x" + SEQ_A[5:]))
+        gapped = _touch(tmp_path / "gapped.a3m", _a3m(SEQ_A[:5] + "-" + SEQ_A[6:]))
+
+        scan = scan_sources({"s": _spec("s", lower, gapped)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert sorted(scan[0].unmatched) == sorted([lower, gapped])
+        assert scan[0].files == []
+
+    def test_duplicate_in_source_errors(self, tmp_path):
+        one = _touch(tmp_path / "one.a3m", _a3m(SEQ_A))
+        two = _touch(tmp_path / "two.a3m", _a3m(SEQ_A, [("h", SEQ_A)]))
+
+        with pytest.raises(MsaSourcesError) as error:
+            scan_sources({"s": _spec("s", one, two)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert "one.a3m" in str(error.value) and "two.a3m" in str(error.value)
+
+    def test_duplicate_across_extensions(self, tmp_path):
+        """x.a3m and x.a3m.gz with the same query are duplicates too."""
+        plain = _touch(tmp_path / "x.a3m", _a3m(SEQ_A))
+        zipped = tmp_path / "x.a3m.gz"
+        with gzip.open(zipped, "wt") as f:
+            f.write(_a3m(SEQ_A))
+
+        with pytest.raises(MsaSourcesError, match="x.a3m.gz"):
+            scan_sources({"s": _spec("s", plain, zipped)}, _queries(SEQ_A), tmp_path / "store")
+
+    def test_same_query_in_two_sources_is_fine(self, tmp_path):
+        """One MSA per source per sequence: the same query under two sources is expected."""
+        a = _touch(tmp_path / "a" / "x.a3m", _a3m(SEQ_A))
+        b = _touch(tmp_path / "b" / "x.a3m", _a3m(SEQ_A))
+
+        scan = scan_sources({"a": _spec("a", a), "b": _spec("b", b)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert [len(s.files) for s in scan] == [1, 1]
+
+    def test_complex_a3m_errors(self, tmp_path):
+        """A ColabFold complex (multi-chain) A3M is refused, not imported as its first chain's MSA."""
+        f = _touch(tmp_path / "pair.a3m", f"#10,12\t1,1\n>101\t102\n{SEQ_A}{SEQ_B}\n")
+
+        with pytest.raises(MsaSourcesError, match="multi-chain"):
+            scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), tmp_path / "store")
+
+    def test_ragged_row_errors(self, tmp_path):
+        """A row whose aligned length differs from the query fails OF3's parser: error naming the file."""
+        f = _touch(tmp_path / "ragged.a3m", _a3m(SEQ_A, [("h", SEQ_A + "K")]))
+
+        with pytest.raises(MsaSourcesError, match="ragged.a3m"):
+            scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), tmp_path / "store")
+
+    def test_uniprot_hits_bad_headers_error(self, tmp_path):
+        """uniprot_hits feeds species pairing, so its headers must parse; other sources don't need to."""
+        f = _touch(tmp_path / "u.a3m", _a3m(SEQ_A, [("seq1", SEQ_A)]))
+
+        with pytest.raises(MsaSourcesError, match="u.a3m"):
+            scan_sources({"uniprot_hits": _spec("uniprot_hits", f)}, _queries(SEQ_A), tmp_path / "store")
+        scan = scan_sources({"uniref90_hits": _spec("uniref90_hits", f)}, _queries(SEQ_A), tmp_path / "store")
+        assert len(scan[0].files) == 1
+
+    def test_uniprot_hits_good_headers_pass(self, tmp_path):
+        f = _touch(tmp_path / "u.a3m", _a3m(SEQ_A, [("tr|A0A1W9RZR3|A0A1W9RZR3_9BACT/19-121", SEQ_A)]))
+
+        scan = scan_sources({"uniprot_hits": _spec("uniprot_hits", f)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert len(scan[0].files) == 1
+
+    def test_existing_store_file_with_different_content_errors(self, tmp_path):
+        store = tmp_path / "store"
+        _store_file(store, "s", SEQ_A, _a3m(SEQ_A, [("old", SEQ_A)]))
+        f = _touch(tmp_path / "a.a3m", _a3m(SEQ_A))
+
+        with pytest.raises(MsaSourcesError, match="msa_sources/s"):
+            scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), store)
+
+    def test_existing_identical_store_file_ok(self, tmp_path):
+        store = tmp_path / "store"
+        _store_file(store, "s", SEQ_A, _a3m(SEQ_A))
+        f = _touch(tmp_path / "a.a3m", _a3m(SEQ_A))
+
+        scan = scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), store)
+
+        assert len(scan[0].files) == 1
+
+    def test_non_a3m_files_ignored(self, tmp_path):
+        f = _touch(tmp_path / "a.a3m", _a3m(SEQ_A))
+        notes = _touch(tmp_path / "notes.txt", "hello")
+
+        scan = scan_sources({"s": _spec("s", f, notes)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert scan[0].ignored == [notes]
+
+    def test_source_with_no_a3m_errors(self, tmp_path):
+        notes = _touch(tmp_path / "notes.txt", "hello")
+
+        with pytest.raises(MsaSourcesError, match="no A3M"):
+            scan_sources({"s": _spec("s", notes)}, _queries(SEQ_A), tmp_path / "store")
+
+    def test_errors_from_two_sources_reported_together(self, tmp_path):
+        ragged = _touch(tmp_path / "ragged.a3m", _a3m(SEQ_A, [("h", SEQ_A + "K")]))
+        pair = _touch(tmp_path / "pair.a3m", f"#10,12\t1,1\n>101\t102\n{SEQ_A}{SEQ_B}\n")
+
+        with pytest.raises(MsaSourcesError) as error:
+            scan_sources({"a": _spec("a", ragged), "b": _spec("b", pair)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert "ragged.a3m" in str(error.value) and "pair.a3m" in str(error.value)
