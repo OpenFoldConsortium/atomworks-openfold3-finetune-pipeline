@@ -24,11 +24,13 @@ The MSA folder. Default: `<output-dir>/organized_msas`.
 
 | Path | What it is |
 |---|---|
-| `unpaired/` | MSAs per sequence from ColabFold |
+| `msa_index.yml` | The MSA sources in this folder, and where each is stored |
+| `unpaired/` | MSAs per sequence from ColabFold (source `colabfold_main`) |
+| `msa_sources/<source>/` | Your own MSAs, from `import-msas` |
 | `paired/` | Paired MSAs per complex from ColabFold |
 | `templates/` | Raw template hits from ColabFold |
 | `template_structures/` | Downloaded template structures |
-| `of3_alignments/` | MSAs laid out for OpenFold3 |
+| `of3_alignments/` | MSAs laid out for OpenFold3, one `<rep_id>/<source>.a3m` per source |
 | `of3_template_alignments/` | Template hits laid out for OpenFold3 |
 | `of3_template_data/` | The template cache and filter records |
 

@@ -11,6 +11,7 @@ Run every stage over a directory of mmCIFs.
 | `--cif-dir` | Required | Directory of input mmCIF files. |
 | `--output-dir` | Required | Output directory for every pipeline artifact. |
 | `--organized-msa-dir` | None | MSA folder. If given, generate-msas queries ColabFold into it. If not, ColabFold is never contacted, and an existing `<output-dir>/organized_msas` from an earlier run is used. |
+| `--msa-sources` | None | Use your own MSAs instead of ColabFold: a sources manifest (see [Use your own MSAs](../how-to/user-msas.md)). Skips the template stages. |
 | `--ccd-path` | Required | Path to the Chemical Component Dictionary mmCIF. |
 | `--template-cache-dir` | None | Pre-built OpenFold3 template cache directory. |
 | `--name` | `finetune` | Dataset name written into manifest.json. |
@@ -113,6 +114,16 @@ Fetch MSAs from ColabFold.
 | `--user-agent` | `aw-of3-finetune` | User-agent string sent with API requests. |
 | `--skip-existing` | Off | Skip rep_ids that already have a colabfold_main.a3m file (useful for resuming). |
 | `--templates` / `--no-templates` | On | Also request template hits (PDB70) in the unpaired query, written to <organized-msa-dir>/templates/<shard>/<hash>.m8 (sequences with no hits get no file). |
+
+## `import-msas`
+
+Import your own MSAs instead of querying ColabFold. See [Use your own MSAs](../how-to/user-msas.md).
+
+| Option | Default | What it does |
+|---|---|---|
+| `--output-dir` | Required | Pipeline output directory produced by finetune-prep (must contain manifest.json and cleaned_structures/). |
+| `--organized-msa-dir` | `<output-dir>/organized_msas` | Folder to import the MSAs into. Must not hold ColabFold MSAs. |
+| `--msa-sources` | Required | YAML/JSON sources manifest mapping each MSA source name to a folder or glob of A3M files. |
 
 ## `fetch-templates`
 

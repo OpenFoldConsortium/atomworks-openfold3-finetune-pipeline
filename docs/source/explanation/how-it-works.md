@@ -30,6 +30,8 @@ Each unique protein sequence gets one MSA from the ColabFold server, keyed by a 
 
 MSAs live in two layouts. `unpaired/` and `paired/` hold what ColabFold returned, and `of3_alignments/` is the layout OpenFold3 reads. `of3_alignments/` is what `train.yml` points to.
 
+You can bring your own MSAs instead with `import-msas` (see [Use your own MSAs](../how-to/user-msas.md)). They are stored per source under `msa_sources/`, in the same hashed layout as ColabFold's `unpaired/`. Either way, `msa_index.yml` lists the sources in the folder, and every later step reads that list rather than asking which tool made the MSAs.
+
 ## Templates
 
 Each sequence's ColabFold hits go through these steps, in order:
