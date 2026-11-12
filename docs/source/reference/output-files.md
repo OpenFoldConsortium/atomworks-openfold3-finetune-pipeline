@@ -24,7 +24,7 @@ The MSA folder. Default: `<output-dir>/organized_msas`.
 
 | Path | What it is |
 |---|---|
-| `msa_index.yml` | The MSA sources in this folder, and where each is stored |
+| `msa_index.yml` | The MSA sources in this folder, and where each is stored. An absolute path is a source linked from an earlier run's MSA folder |
 | `unpaired/` | MSAs per sequence from ColabFold (source `colabfold_main`) |
 | `msa_sources/<source>/` | Your own MSAs, from `import-msas` |
 | `paired/` | Paired MSAs per complex from ColabFold |

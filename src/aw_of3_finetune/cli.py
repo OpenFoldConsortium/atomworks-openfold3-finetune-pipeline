@@ -877,6 +877,13 @@ def import_msas(output_dir: Path, msa_dir: Path | None, manifest_path: Path) -> 
         summary = import_user_msas(output_dir, msa_dir, manifest_path)
     except MsaSourcesError as error:
         raise click.ClickException(str(error)) from error
+    for name, store in summary.linked.items():
+        click.echo(f"{name}: linked {store}, covers {summary.covered[name]} dataset sequence(s)")
+    if summary.linked:
+        click.echo(
+            "Linked, not copied: keep that folder where it is. Rebuilding of3_alignments/ "
+            "(materialize-dataset-cache, or rerunning finetune-pipeline) reads the MSAs from it."
+        )
     for scan in summary.scans:
         click.echo(
             f"{scan.source}: imported {len(scan.files)} file(s), "

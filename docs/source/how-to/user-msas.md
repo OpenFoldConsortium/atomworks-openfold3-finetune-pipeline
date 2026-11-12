@@ -63,7 +63,7 @@ Files whose query matches no chain in the dataset are skipped: they are not chec
 
 ## Reuse MSAs from an earlier run
 
-Every MSA folder lists its sources in `msa_index.yml`, so you can pass the folder itself to `--msa-sources` instead of writing a manifest. This works for ColabFold MSAs from `generate-msas`, including folders from before `msa_index.yml` existed, and for MSAs you imported earlier. The new run can use any output directory:
+To reuse MSAs from an earlier run, pass that run's MSA folder to `--msa-sources` instead of a manifest. This works for ColabFold MSAs from `generate-msas`, including folders made before `msa_index.yml` existed, and for MSAs you imported earlier. The new run can use any output directory, and ColabFold is never contacted.
 
 ```bash
 pixi run finetune-pipeline \
@@ -74,7 +74,15 @@ pixi run finetune-pipeline \
   --name <dataset-name>
 ```
 
-Only the MSAs for chains in the new dataset are copied in, and ColabFold is never contacted. Chains with no MSA in that folder get none; they are counted in a warning.
+**The earlier folder is linked, not copied.** The new run's `msa_index.yml` records the earlier folder's absolute path for each source, for example:
+
+```yaml
+colabfold_main: /data/runs/first/organized_msas/unpaired
+```
+
+The new MSA folder then holds only `msa_index.yml` and `of3_alignments/`, the plain-text MSAs OpenFold3 reads, for the chains in this dataset.
+
+**Keep the earlier folder where it is.** `materialize-dataset-cache`, and rerunning `finetune-pipeline`, rebuild `of3_alignments/` from it. If it has moved or been deleted, they warn that the source's folder is missing and remove that source's MSAs from `of3_alignments/`. Training reads only `of3_alignments/`, so a finished `train.yml` keeps working. If you need a self-contained copy, write a manifest instead: a manifest's files are always copied in.
 
 Templates are not carried over this way yet. To reuse ColabFold MSAs and keep templates, point `--organized-msa-dir` at the earlier folder and add `--skip-existing`, which queries ColabFold only for sequences the folder does not have.
 

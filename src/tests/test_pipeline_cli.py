@@ -1765,5 +1765,6 @@ class TestFinetunePipelineMsaSources:
         assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq) / "colabfold_main.a3m").read_text() == (
             f">query\n{seq}\n"
         )
+        assert not (output_dir / "organized_msas" / "msa_sources").exists()  # linked, not copied
         config = yaml.safe_load((output_dir / "train.yml").read_text())
         assert config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"] == {"moltypes": ["PROTEIN"]}

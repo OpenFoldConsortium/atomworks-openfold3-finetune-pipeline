@@ -28,7 +28,7 @@ uniref90_hits: searches/uniref90
 cfdb_uniref30: "pdb_msas/*/cfdb_uniref30.a3m"
 ```
 
-Instead of a file, `--msa-sources` also takes an MSA folder from an earlier run: its `msa_index.yml` has the same shape.
+Instead of a file, `--msa-sources` also takes an MSA folder from an earlier run, which is linked rather than copied. See [Reuse MSAs from an earlier run](../how-to/user-msas.md#reuse-msas-from-an-earlier-run).
 
 Names are letters, digits, `_` and `-`; `colabfold_paired`, `dummy` and `templates` are not allowed. See [Use your own MSAs](../how-to/user-msas.md).
 

@@ -8,7 +8,7 @@ their query (first) sequence, so they can be named anything.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -16,6 +16,7 @@ import yaml
 from atomworks.enums import MSAFileExtension
 from atomworks.io.utils.compression import transfer_with_compression
 from atomworks.io.utils.io_utils import apply_sharding_pattern
+from atomworks.ml.preprocessing.msa.finding import find_msas
 from atomworks.ml.utils.io import open_file
 from openfold3.core.data.io.sequence.msa import parse_a3m
 from openfold3.core.data.primitives.sequence.msa import process_msa_pairing_metadata
@@ -111,49 +112,12 @@ def _select_files(value: str, base: Path) -> tuple[list[Path], str | None]:
     return sorted(p for p in directory.rglob("*") if p.is_file()), None
 
 
-def _load_msa_folder(folder: Path) -> dict[str, SourceSpec]:
-    """Use an earlier run's MSA folder as a manifest: its source index lists the sources.
-
-    Args:
-        folder: An organized MSA folder (written by generate-msas or import-msas). One
-            without msa_index.yml but with ColabFold's unpaired/ reads as colabfold_main.
-
-    Returns:
-        ``{name: SourceSpec}`` with every file in each source's store.
-
-    Raises:
-        MsaSourcesError: If the folder holds no MSA sources or a listed store is missing.
-    """
-    index = read_msa_index(folder)
-    if not index:
-        raise MsaSourcesError(
-            f"{folder}: no MSA sources found (no {MSA_INDEX_NAME} and no {COLABFOLD_UNPAIRED_DIRNAME}/). "
-            "Pass an MSA folder from an earlier run, or a sources manifest file."
-        )
-    problems = [
-        f"{name}: store {store} listed in {folder / MSA_INDEX_NAME} does not exist"
-        for name, store in index.items() if not store.is_dir()
-    ]
-    if problems:
-        raise MsaSourcesError(f"{folder}:\n  " + "\n  ".join(problems))
-    return {
-        name: SourceSpec(
-            name=name,
-            spec=str(store.relative_to(folder)),
-            files=sorted(p.resolve() for p in store.rglob("*") if p.is_file()),
-        )
-        for name, store in index.items()
-    }
-
-
 def load_msa_sources_manifest(path: Path) -> dict[str, SourceSpec]:
-    """Load a sources manifest, or the source index of an earlier run's MSA folder.
+    """Load a sources manifest.
 
     Args:
-        path: YAML or JSON file mapping source name to a directory or glob (relative
-            values resolve against the manifest's folder), or an organized MSA folder
-            from an earlier run (generate-msas or import-msas), whose sources are read
-            from its msa_index.yml.
+        path: YAML or JSON file mapping source name to a directory or glob. Relative
+            values resolve against the manifest's folder.
 
     Returns:
         ``{name: SourceSpec}`` in manifest order.
@@ -162,8 +126,6 @@ def load_msa_sources_manifest(path: Path) -> dict[str, SourceSpec]:
         MsaSourcesError: Listing every problem (bad names, missing directories, globs
             matching nothing, a manifest that is not a name-to-string mapping).
     """
-    if path.is_dir():
-        return _load_msa_folder(path)
     try:
         content = yaml.safe_load(path.read_text())
     except yaml.YAMLError as exc:
@@ -416,8 +378,11 @@ def _validated_index(msa_dir: Path, raw: object, index_path: Path) -> dict[str, 
         if (problem := source_name_problem(name)) is not None:
             problems.append(problem)
             continue
-        if not isinstance(value, str) or not value or Path(value).is_absolute():
-            problems.append(f"{name}: store folder must be a path relative to {msa_dir}, got {value!r}")
+        if not isinstance(value, str) or not value:
+            problems.append(f"{name}: store folder must be a path, got {value!r}")
+            continue
+        if Path(value).is_absolute():  # linked from an earlier run's MSA folder
+            index[name] = Path(value)
             continue
         if not (root / value).resolve().is_relative_to(root):
             problems.append(f"{name}: store folder {value!r} is outside {msa_dir}")
@@ -514,16 +479,81 @@ class ImportSummary:
         reorganize: The of3_alignments sync that followed.
         other_sources: Sources in the index from earlier imports, not in this manifest;
             they stay in of3_alignments/ and train.yml.
+        linked: When importing from an earlier run's MSA folder, each source's store in
+            that folder, which the index now points at (nothing is copied).
     """
 
     scans: list[SourceScan]
     covered: dict[str, int]
     reorganize: ReorganizeSummary
     other_sources: list[str]
+    linked: dict[str, Path] = field(default_factory=dict)
+
+
+def linked_msa_stores(folder: Path) -> dict[str, Path]:
+    """The stores of an earlier run's MSA folder, as absolute paths to link to.
+
+    Args:
+        folder: An organized MSA folder (generate-msas or import-msas). One without
+            msa_index.yml but with ColabFold's unpaired/ gives colabfold_main. A folder
+            that itself links elsewhere gives the original stores.
+
+    Returns:
+        ``{source name: absolute store folder}``.
+
+    Raises:
+        MsaSourcesError: If the folder holds no MSA sources or a listed store is missing.
+    """
+    index = read_msa_index(folder)
+    if not index:
+        raise MsaSourcesError(
+            f"{folder}: no MSA sources found (no {MSA_INDEX_NAME} and no {COLABFOLD_UNPAIRED_DIRNAME}/). "
+            "Pass an MSA folder from an earlier run, or a sources manifest file."
+        )
+    problems = [
+        f"{name}: store {store} listed in {folder / MSA_INDEX_NAME} does not exist"
+        for name, store in index.items() if not store.is_dir()
+    ]
+    if problems:
+        raise MsaSourcesError(f"{folder}:\n  " + "\n  ".join(problems))
+    return {name: store.resolve() for name, store in index.items()}
+
+
+def _link_msa_folder(output_dir: Path, msa_dir: Path, folder: Path) -> ImportSummary:
+    """Point msa_dir's index at an earlier run's stores (no copy), then reorganize.
+
+    Args:
+        output_dir: Pipeline output directory.
+        msa_dir: The organized MSA folder to link into.
+        folder: The earlier run's MSA folder.
+
+    Returns:
+        The summary, with ``linked`` set and per-source coverage.
+    """
+    from aw_of3_finetune.pipeline import reorganize_msas_for_of3  # pipeline imports this module
+
+    linked = linked_msa_stores(folder)
+    seqs = list(collect_msa_queries(output_dir).values())
+    covered = {
+        name: len(find_msas(seqs, [{"dir": str(store), "extension": STORE_EXTENSION, "directory_depth": 1}])[1])
+        for name, store in linked.items()
+    }
+    add_to_msa_index(msa_dir, {name: str(store) for name, store in linked.items()})
+    reorganize = reorganize_msas_for_of3(output_dir, msa_dir, msa_dir / OF3_ALIGNMENTS_DIRNAME)
+    return ImportSummary(
+        scans=[],
+        covered=covered,
+        reorganize=reorganize,
+        other_sources=[name for name in read_msa_index(msa_dir) if name not in linked],
+        linked=linked,
+    )
 
 
 def import_user_msas(output_dir: Path, msa_dir: Path, manifest_path: Path) -> ImportSummary:
     """Import user MSAs into atomworks-layout stores and sync them into of3_alignments/.
+
+    With an earlier run's MSA folder in place of a manifest, its stores are linked
+    (the index points at them) instead of copied.
 
     Steps: refuse a ColabFold MSA folder; load the manifest; check every file
     (scan_sources) before copying anything; copy each file to
@@ -533,7 +563,7 @@ def import_user_msas(output_dir: Path, msa_dir: Path, manifest_path: Path) -> Im
     Args:
         output_dir: Pipeline output directory; the dataset's sequences come from it.
         msa_dir: The organized MSA folder.
-        manifest_path: Sources manifest (YAML/JSON).
+        manifest_path: Sources manifest (YAML/JSON), or an earlier run's MSA folder.
 
     Returns:
         What was imported and what of3_alignments/ now holds.
@@ -549,6 +579,8 @@ def import_user_msas(output_dir: Path, msa_dir: Path, manifest_path: Path) -> Im
             f"{msa_dir} holds ColabFold MSAs ({COLABFOLD_UNPAIRED_DIRNAME}/); one MSA folder holds "
             "ColabFold or user MSAs, not both. Use a fresh --organized-msa-dir."
         )
+    if manifest_path.is_dir():
+        return _link_msa_folder(output_dir, msa_dir, manifest_path)
     manifest = load_msa_sources_manifest(manifest_path)
     queries = collect_msa_queries(output_dir)
     store_root = msa_dir / MSA_SOURCES_DIRNAME

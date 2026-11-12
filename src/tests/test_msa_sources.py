@@ -158,48 +158,6 @@ class TestLoadManifest:
         with pytest.raises(MsaSourcesError, match="no sources"):
             load_msa_sources_manifest(manifest)
 
-    def test_msa_folder_reads_its_index(self, tmp_path):
-        """An MSA folder from an earlier run is its own manifest: its msa_index.yml lists the sources."""
-        folder = tmp_path / "old_run" / "organized_msas"
-        stored = _touch(folder / "unpaired" / "ab" / "abc.a3m.gz")
-        _write_index(folder, {"colabfold_main": "unpaired"})
-
-        specs = load_msa_sources_manifest(folder)
-
-        assert list(specs) == ["colabfold_main"]
-        assert specs["colabfold_main"].files == [stored.resolve()]
-
-    def test_msa_folder_of_user_sources(self, tmp_path):
-        folder = tmp_path / "old_run" / "organized_msas"
-        a = _touch(folder / "msa_sources" / "a" / "ab" / "abc.a3m.gz")
-        b = _touch(folder / "msa_sources" / "b" / "cd" / "cde.a3m.gz")
-        _write_index(folder, {"a": "msa_sources/a", "b": "msa_sources/b"})
-
-        specs = load_msa_sources_manifest(folder)
-
-        assert {name: spec.files for name, spec in specs.items()} == {"a": [a.resolve()], "b": [b.resolve()]}
-
-    def test_legacy_colabfold_folder_without_index(self, tmp_path):
-        """A ColabFold folder from before the index existed reads as colabfold_main."""
-        folder = tmp_path / "msas"
-        stored = _touch(folder / "unpaired" / "ab" / "abc.a3m.gz")
-
-        assert load_msa_sources_manifest(folder)["colabfold_main"].files == [stored.resolve()]
-
-    def test_folder_without_msas_errors(self, tmp_path):
-        """A folder that is not an MSA folder says so, rather than importing nothing."""
-        _touch(tmp_path / "random" / "notes.txt")
-
-        with pytest.raises(MsaSourcesError, match="no MSA sources"):
-            load_msa_sources_manifest(tmp_path / "random")
-
-    def test_folder_whose_store_is_missing_errors(self, tmp_path):
-        folder = tmp_path / "msas"
-        _write_index(folder, {"gone": "msa_sources/gone"})
-
-        with pytest.raises(MsaSourcesError, match="msa_sources/gone"):
-            load_msa_sources_manifest(folder)
-
     def test_all_problems_reported_together(self, tmp_path):
         """One missing directory and one rejected name are both in a single error."""
         _touch(tmp_path / "sub" / "x.a3m")
@@ -450,9 +408,17 @@ class TestMsaIndex:
         with pytest.raises(MixedMsaDirError, match="--organized-msa-dir"):
             read_msa_index(msa_dir)
 
-    @pytest.mark.parametrize("value", ["/abs/path", "../elsewhere", "msa_sources/../../out"])
-    def test_absolute_or_escaping_value_errors(self, tmp_path, value):
-        """Store folders stay inside the MSA folder, so the folder can be moved."""
+    def test_absolute_value_is_a_linked_store(self, tmp_path):
+        """An absolute store folder is a source linked from an earlier run's MSA folder."""
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, {"colabfold_main": str(tmp_path / "old" / "unpaired")})
+
+        assert read_msa_index(msa_dir) == {"colabfold_main": tmp_path / "old" / "unpaired"}
+        assert msa_dir_kind(msa_dir) == "user"
+
+    @pytest.mark.parametrize("value", ["../elsewhere", "msa_sources/../../out"])
+    def test_escaping_relative_value_errors(self, tmp_path, value):
+        """A relative store folder stays inside the MSA folder, so the folder can be moved."""
         msa_dir = tmp_path / "msas"
         _write_index(msa_dir, {"x": value})
 
@@ -638,6 +604,86 @@ class TestImportUserMsas:
         assert summary.reorganize.missing == 1
         # Skipped: files for chains outside this dataset are not copied into the store.
         assert not list((msa_dir / "msa_sources").rglob("*.a3m.gz"))
+
+
+class TestImportFromEarlierFolder:
+    """--msa-sources <earlier MSA folder>: link its stores instead of copying them."""
+
+    def test_folder_is_linked_not_copied(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        old = tmp_path / "earlier" / "organized_msas"
+        rep_id = alignment_rep_id(seq)
+        _store_file(old, "unpaired", seq, _a3m(seq))
+        _write_index(old, {"colabfold_main": "unpaired"})
+        msa_dir = tmp_path / "new" / "organized_msas"
+
+        summary = import_user_msas(output_dir, msa_dir, old)
+
+        assert not (msa_dir / "msa_sources").exists()
+        assert yaml.safe_load((msa_dir / "msa_index.yml").read_text()) == {"colabfold_main": str((old / "unpaired").resolve())}
+        assert (msa_dir / "of3_alignments" / rep_id / "colabfold_main.a3m").read_text() == _a3m(seq)
+        assert summary.linked == {"colabfold_main": (old / "unpaired").resolve()}
+        assert summary.covered == {"colabfold_main": 1}
+        assert msa_dir_kind(msa_dir) == "user"
+
+    def test_legacy_colabfold_folder_is_linked(self, cif_protein_monomer, tmp_path):
+        """A ColabFold folder from before msa_index.yml existed links its unpaired/ as colabfold_main."""
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        old = tmp_path / "earlier"
+        _store_file(old, "unpaired", seq, _a3m(seq))
+        msa_dir = tmp_path / "new"
+
+        summary = import_user_msas(output_dir, msa_dir, old)
+
+        assert summary.linked == {"colabfold_main": (old / "unpaired").resolve()}
+
+    def test_linking_a_linked_folder_points_at_the_original(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        original = tmp_path / "original"
+        _store_file(original, "unpaired", seq, _a3m(seq))
+        first, second = tmp_path / "first", tmp_path / "second"
+        import_user_msas(output_dir, first, original)
+
+        summary = import_user_msas(output_dir, second, first)
+
+        assert summary.linked == {"colabfold_main": (original / "unpaired").resolve()}
+
+    def test_user_sources_folder_is_linked(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "raw" / "x.a3m", _a3m(seq))
+        earlier = tmp_path / "earlier"
+        import_user_msas(output_dir, earlier, _write_manifest(tmp_path / "m.yml", {"my_lab_db": "raw"}))
+
+        summary = import_user_msas(output_dir, tmp_path / "new", earlier)
+
+        assert summary.linked == {"my_lab_db": (earlier / "msa_sources" / "my_lab_db").resolve()}
+
+    def test_folder_without_msas_errors(self, cif_protein_monomer, tmp_path):
+        output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "random" / "notes.txt")
+
+        with pytest.raises(MsaSourcesError, match="no MSA sources"):
+            import_user_msas(output_dir, tmp_path / "new", tmp_path / "random")
+
+    def test_folder_whose_store_is_missing_errors(self, cif_protein_monomer, tmp_path):
+        output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
+        _write_index(tmp_path / "earlier", {"gone": "msa_sources/gone"})
+
+        with pytest.raises(MsaSourcesError, match="msa_sources/gone"):
+            import_user_msas(output_dir, tmp_path / "new", tmp_path / "earlier")
+
+    def test_cli_says_the_folder_is_linked(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _store_file(tmp_path / "earlier", "unpaired", seq, _a3m(seq))
+
+        result = CliRunner().invoke(
+            import_msas, ["--output-dir", str(output_dir), "--msa-sources", str(tmp_path / "earlier")],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "colabfold_main: linked" in result.stdout and "covers 1" in result.stdout
+        assert "keep" in result.stdout  # tells the user the earlier folder must stay
 
 
 class TestImportMsasCli:
