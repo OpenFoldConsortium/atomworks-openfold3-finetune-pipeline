@@ -8,6 +8,7 @@ TestMsaIndex        msa_index.yml: source name -> store folder, legacy folders, 
 TestImportUserMsas  import_user_msas: stores, index, of3_alignments, reruns.
 TestImportMsasCli   the import-msas command.
 TestGenerateMsasIndex  generate-msas writes the source index and refuses user folders.
+TestMsaSettings     train.yml's msa section: OF3 defaults, extended for new source names.
 """
 
 from __future__ import annotations
@@ -23,7 +24,15 @@ from atomworks.ml.preprocessing.msa.organizing import MSAOrganizationConfig, org
 from click.testing import CliRunner
 
 import aw_of3_finetune.cli as cli_mod
-from aw_of3_finetune.cli import finetune_prep, generate_msas, import_msas
+from aw_of3_finetune.cli import (
+    finetune_pipeline,
+    finetune_prep,
+    generate_msas,
+    generate_train_config,
+    import_msas,
+)
+from aw_of3_finetune.training_config import discover_msa_sources, msa_settings_for_sources
+from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
 
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.msa_sources import (
@@ -661,3 +670,139 @@ class TestGenerateMsasIndex:
 
         assert result.exit_code == 1
         assert "fresh --organized-msa-dir" in result.output
+
+
+def _pipeline_output(tmp_path: Path, ccd_path: Path, cifs: dict[str, Path], *extra: str) -> Path:
+    """A full finetune-pipeline output (no MSAs) for these {pdb_id: cif} inputs."""
+    cif_dir = tmp_path / "input"
+    cif_dir.mkdir()
+    for pdb_id, cif in cifs.items():
+        (cif_dir / f"{pdb_id}.cif").symlink_to(cif.resolve())
+    output_dir = tmp_path / "out"
+    result = CliRunner().invoke(finetune_pipeline, [
+        "--cif-dir", str(cif_dir), "--output-dir", str(output_dir), "--ccd-path", str(ccd_path),
+        "--skip-report", "--skip-validation", *extra,
+    ], catch_exceptions=False)
+    assert result.exit_code == 0, result.output
+    return output_dir
+
+
+class TestMsaSettings:
+    @pytest.mark.parametrize("sources", [{"colabfold_main"}, {"uniref90_hits", "uniprot_hits"}])
+    def test_known_names_keep_today_section(self, sources):
+        """Names OF3 already reads: the msa section stays as it is today, so OF3's defaults apply."""
+        assert msa_settings_for_sources(sources) == {"moltypes": ["PROTEIN"]}
+
+    def test_new_name_extends_defaults(self):
+        defaults = MSASettings()
+
+        settings = msa_settings_for_sources({"my_lab_db"})
+
+        assert settings["moltypes"] == ["PROTEIN"]
+        assert settings["max_seq_counts"] == {**defaults.max_seq_counts, "my_lab_db": 16384}
+        assert settings["aln_order"] == [*defaults.aln_order, "my_lab_db"]
+
+    def test_new_names_appended_alphabetically(self):
+        assert msa_settings_for_sources({"zeta", "alpha"})["aln_order"][-2:] == ["alpha", "zeta"]
+
+    def test_mixed_known_and_new_names(self):
+        """One OF3 name and one new name: every OF3 default kept, only the new name added."""
+        defaults = MSASettings()
+
+        settings = msa_settings_for_sources({"uniref90_hits", "my_lab_db"})
+
+        assert settings["max_seq_counts"] == {**defaults.max_seq_counts, "my_lab_db": 16384}
+        assert settings["aln_order"] == [*defaults.aln_order, "my_lab_db"]
+
+    def test_uniprot_gets_count_not_aln_order(self):
+        """uniprot is paired on, not stacked: OF3 must read it (a count) but not list it in aln_order."""
+        settings = msa_settings_for_sources({"uniprot"})
+
+        assert "uniprot" in settings["max_seq_counts"]
+        assert "uniprot" not in settings["aln_order"]
+
+    def test_settings_validate_with_of3(self):
+        MSASettings(**msa_settings_for_sources({"my_lab_db", "uniprot"}))
+
+    def test_discover_reads_stems(self, tmp_path):
+        _touch(tmp_path / "of3" / "aaa" / "my_lab_db.a3m")
+        _touch(tmp_path / "of3" / "bbb" / "uniref90_hits.a3m")
+        _touch(tmp_path / "of3" / "bbb" / "notes.txt")
+
+        assert discover_msa_sources(tmp_path / "of3") == {"my_lab_db", "uniref90_hits"}
+        assert discover_msa_sources(tmp_path / "missing") == set()
+
+    def test_train_yml_has_settings_in_train_and_validation(self, cif_protein_monomer, cif_protein_only, ccd_path, tmp_path):
+        """generate-train-config writes the extended settings into both dataset sections."""
+        split_csv = _touch(tmp_path / "split.csv", "id,split\n3u8v,val\n")
+        output_dir = _pipeline_output(
+            tmp_path, ccd_path, {"3u8v": cif_protein_monomer, "2crb": cif_protein_only}, "--split-csv", str(split_csv)
+        )
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        _touch(tmp_path / "user" / "a.a3m", _a3m(seq))
+        result = CliRunner().invoke(import_msas, [
+            "--output-dir", str(output_dir), "--msa-sources", str(_write_manifest(tmp_path / "m.yml", {"my_lab_db": "user"})),
+        ], catch_exceptions=False)
+        assert result.exit_code == 0, result.output
+
+        result = CliRunner().invoke(generate_train_config, ["--output-dir", str(output_dir)], catch_exceptions=False)
+
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        train_msa = config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"]
+        val_msa = config["dataset_configs"]["validation"]["val-weighted-pdb"]["config"]["msa"]
+        assert train_msa["max_seq_counts"]["my_lab_db"] == 16384
+        assert val_msa["max_seq_counts"]["my_lab_db"] == 16384
+        assert val_msa["subsample_main"] is False
+
+    def test_empty_alignments_warns_and_keeps_today_section(self, cif_protein_monomer, ccd_path, tmp_path):
+        output_dir = _pipeline_output(tmp_path, ccd_path, {"3u8v": cif_protein_monomer})
+        (output_dir / "organized_msas").mkdir()
+
+        result = CliRunner().invoke(generate_train_config, ["--output-dir", str(output_dir)], catch_exceptions=False)
+
+        assert result.exit_code == 0, result.output
+        assert "no MSAs" in result.stderr
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        assert config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"] == {"moltypes": ["PROTEIN"]}
+
+    def test_of3_dataset_reads_new_source(self, cif_protein_monomer, ccd_path, tmp_path):
+        """OpenFold3's own dataset, built from train.yml, loads every row of a new source."""
+        output_dir = _pipeline_output(tmp_path, ccd_path, {"3u8v": cif_protein_monomer})
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        hits = [("h1", "A" + seq[1:]), ("h2", "W" + seq[1:])]  # distinct rows: OF3 drops duplicates
+        _touch(tmp_path / "user" / "a.a3m", _a3m(seq, hits))
+        result = CliRunner().invoke(import_msas, [
+            "--output-dir", str(output_dir), "--msa-sources", str(_write_manifest(tmp_path / "m.yml", {"my_lab_db": "user"})),
+        ], catch_exceptions=False)
+        assert result.exit_code == 0, result.output
+        result = CliRunner().invoke(generate_train_config, ["--output-dir", str(output_dir)], catch_exceptions=False)
+        assert result.exit_code == 0, result.output
+
+        n_rows = _of3_msa_rows(output_dir)
+
+        # Training subsamples the main MSA (at least one row), so a source OF3 reads gives the
+        # query plus >= 1 row; a source it ignores leaves the query alone.
+        assert n_rows > 1
+
+
+def _of3_msa_rows(output_dir: Path) -> int:
+    """MSA rows OpenFold3's WeightedPDBDataset loads for the first datapoint, configured from train.yml."""
+    import warnings
+
+    from openfold3.core.data.framework.single_datasets.pdb import WeightedPDBDataset
+    from openfold3.projects.of3_all_atom.config.dataset_configs import DATASET_CONFIG_REGISTRY, TrainingDatasetPaths
+
+    WeightedPDBConfig = DATASET_CONFIG_REGISTRY.get("WeightedPDBDataset")
+
+    config = yaml.safe_load((output_dir / "train.yml").read_text())
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        dataset = WeightedPDBDataset(WeightedPDBConfig(
+            name="user-msas",
+            dataset_paths=TrainingDatasetPaths(**config["dataset_paths"]["weighted-pdb"]),
+            msa=config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"],
+            crop={"token_crop": {"enabled": False}},
+        ))
+        item = dataset[0]
+    return int(item["msa"].shape[0])
