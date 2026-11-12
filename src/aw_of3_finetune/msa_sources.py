@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from atomworks.enums import MSAFileExtension
@@ -20,7 +21,7 @@ from openfold3.core.data.io.sequence.msa import parse_a3m
 from openfold3.core.data.primitives.sequence.msa import process_msa_pairing_metadata
 from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
 
-from aw_of3_finetune.constants import MSA_SOURCES_DIRNAME
+from aw_of3_finetune.constants import COLABFOLD_UNPAIRED_DIRNAME, MSA_INDEX_NAME, MSA_SOURCES_DIRNAME
 from aw_of3_finetune.msa import alignment_rep_id
 
 # Source names with an OpenFold3-internal or reserved meaning.
@@ -40,6 +41,10 @@ _COMPLEX_A3M_HEADER = re.compile(r"^#\d+(,\d+)*\t\d+(,\d+)*")
 
 class MsaSourcesError(ValueError):
     """A problem with user-provided MSAs; the message lists every problem found."""
+
+
+class MixedMsaDirError(MsaSourcesError):
+    """An MSA folder would hold both ColabFold and user-provided MSAs."""
 
 
 @dataclass(frozen=True)
@@ -285,3 +290,115 @@ def scan_sources(
     if problems:
         raise MsaSourcesError("Problems with the user MSAs:\n  " + "\n  ".join(problems))
     return scans
+
+
+def _validated_index(msa_dir: Path, raw: object, index_path: Path) -> dict[str, Path]:
+    """Check a raw index mapping and resolve its store folders.
+
+    Args:
+        msa_dir: The organized MSA folder.
+        raw: Parsed index content.
+        index_path: The index file, for messages.
+
+    Returns:
+        ``{name: absolute store folder}``, sorted by name.
+
+    Raises:
+        MsaSourcesError: If the content is not a valid index.
+        MixedMsaDirError: If it lists both ColabFold's store and user stores.
+    """
+    if not isinstance(raw, dict):
+        raise MsaSourcesError(f"{index_path}: must map each source name to its store folder")
+    problems: list[str] = []
+    index: dict[str, Path] = {}
+    root = msa_dir.resolve()
+    for name, value in raw.items():
+        if (problem := source_name_problem(name)) is not None:
+            problems.append(problem)
+            continue
+        if not isinstance(value, str) or not value or Path(value).is_absolute():
+            problems.append(f"{name}: store folder must be a path relative to {msa_dir}, got {value!r}")
+            continue
+        if not (root / value).resolve().is_relative_to(root):
+            problems.append(f"{name}: store folder {value!r} is outside {msa_dir}")
+            continue
+        index[name] = msa_dir / value
+    if problems:
+        raise MsaSourcesError(f"{index_path}:\n  " + "\n  ".join(problems))
+    unpaired = msa_dir / COLABFOLD_UNPAIRED_DIRNAME
+    if unpaired in index.values() and len(index) > 1:
+        raise MixedMsaDirError(
+            f"{index_path} lists both ColabFold MSAs ({COLABFOLD_UNPAIRED_DIRNAME}/) and user MSAs; "
+            "one MSA folder holds one or the other. Use a fresh --organized-msa-dir."
+        )
+    return dict(sorted(index.items()))
+
+
+def _raw_index(msa_dir: Path) -> dict:
+    """The index as stored, or the implicit one of a folder written before the index existed."""
+    index_path = msa_dir / MSA_INDEX_NAME
+    if index_path.exists():
+        try:
+            return yaml.safe_load(index_path.read_text())
+        except yaml.YAMLError as exc:
+            raise MsaSourcesError(f"{index_path}: not valid YAML: {exc}") from exc
+    if (msa_dir / COLABFOLD_UNPAIRED_DIRNAME).is_dir():
+        return {"colabfold_main": COLABFOLD_UNPAIRED_DIRNAME}
+    return {}
+
+
+def read_msa_index(msa_dir: Path) -> dict[str, Path]:
+    """Read the source index of an organized MSA folder.
+
+    The only reader of ``msa_index.yml`` and the only place that names ColabFold's
+    ``unpaired/`` as a source. A folder with no index but an ``unpaired/`` directory
+    (written before the index existed) reads as ``{"colabfold_main": unpaired/}``;
+    reading never writes. A listed store missing on disk is kept; callers warn.
+
+    Args:
+        msa_dir: The organized MSA folder.
+
+    Returns:
+        ``{source name: store folder}``, sorted by name; empty if the folder has no MSAs.
+
+    Raises:
+        MsaSourcesError: If the index is malformed.
+        MixedMsaDirError: If it lists both ColabFold's store and user stores.
+    """
+    return _validated_index(msa_dir, _raw_index(msa_dir), msa_dir / MSA_INDEX_NAME)
+
+
+def msa_dir_kind(msa_dir: Path) -> Literal["colabfold", "user", "empty"]:
+    """Say whether an MSA folder holds ColabFold MSAs, user MSAs, or none, from its index.
+
+    Args:
+        msa_dir: The organized MSA folder.
+
+    Returns:
+        "colabfold", "user" or "empty".
+    """
+    index = read_msa_index(msa_dir)
+    if not index:
+        return "empty"
+    if msa_dir / COLABFOLD_UNPAIRED_DIRNAME in index.values():
+        return "colabfold"
+    return "user"
+
+
+def add_to_msa_index(msa_dir: Path, entries: dict[str, str]) -> None:
+    """Merge entries into the source index (newer wins), refusing to write an invalid or mixed index.
+
+    Args:
+        msa_dir: The organized MSA folder (created if missing).
+        entries: ``{source name: store folder relative to msa_dir}``.
+
+    Raises:
+        MsaSourcesError: If the merged index is invalid (nothing is written).
+        MixedMsaDirError: If it would mix ColabFold and user MSAs (nothing is written).
+    """
+    read_msa_index(msa_dir)  # refuse to build on a malformed or mixed index
+    merged = {**_raw_index(msa_dir), **entries}
+    index_path = msa_dir / MSA_INDEX_NAME
+    _validated_index(msa_dir, merged, index_path)
+    msa_dir.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(yaml.safe_dump(dict(sorted(merged.items())), sort_keys=False))

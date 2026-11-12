@@ -4,6 +4,7 @@ Test structure
 --------------
 TestLoadManifest    sources manifest (YAML/JSON): directories, globs, source-name rules.
 TestScanSources     per-file checks before import: query match, duplicates, OF3 format.
+TestMsaIndex        msa_index.yml: source name -> store folder, legacy folders, no mixing.
 """
 
 from __future__ import annotations
@@ -17,9 +18,13 @@ import yaml
 
 from aw_of3_finetune.msa import alignment_rep_id
 from aw_of3_finetune.msa_sources import (
+    MixedMsaDirError,
     MsaSourcesError,
     SourceSpec,
+    add_to_msa_index,
     load_msa_sources_manifest,
+    msa_dir_kind,
+    read_msa_index,
     scan_sources,
 )
 
@@ -297,3 +302,113 @@ class TestScanSources:
             scan_sources({"a": _spec("a", ragged), "b": _spec("b", pair)}, _queries(SEQ_A), tmp_path / "store")
 
         assert "ragged.a3m" in str(error.value) and "pair.a3m" in str(error.value)
+
+
+def _write_index(msa_dir: Path, mapping: dict) -> Path:
+    """Write <msa_dir>/msa_index.yml."""
+    msa_dir.mkdir(parents=True, exist_ok=True)
+    path = msa_dir / "msa_index.yml"
+    path.write_text(yaml.safe_dump(mapping))
+    return path
+
+
+class TestMsaIndex:
+    def test_reads_user_index(self, tmp_path):
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, {"b": "msa_sources/b", "a": "msa_sources/a"})
+
+        index = read_msa_index(msa_dir)
+
+        assert list(index) == ["a", "b"]
+        assert index == {"a": msa_dir / "msa_sources" / "a", "b": msa_dir / "msa_sources" / "b"}
+        assert msa_dir_kind(msa_dir) == "user"
+
+    def test_reads_colabfold_index(self, tmp_path):
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, {"colabfold_main": "unpaired"})
+
+        assert read_msa_index(msa_dir) == {"colabfold_main": msa_dir / "unpaired"}
+        assert msa_dir_kind(msa_dir) == "colabfold"
+
+    def test_legacy_unpaired_without_index(self, tmp_path):
+        """A folder from before the index existed reads as colabfold_main; reading writes nothing."""
+        msa_dir = tmp_path / "msas"
+        (msa_dir / "unpaired").mkdir(parents=True)
+
+        assert read_msa_index(msa_dir) == {"colabfold_main": msa_dir / "unpaired"}
+        assert msa_dir_kind(msa_dir) == "colabfold"
+        assert not (msa_dir / "msa_index.yml").exists()
+
+    def test_empty_dir(self, tmp_path):
+        assert read_msa_index(tmp_path) == {}
+        assert msa_dir_kind(tmp_path) == "empty"
+        assert read_msa_index(tmp_path / "missing") == {}
+
+    def test_mixed_index_errors(self, tmp_path):
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, {"colabfold_main": "unpaired", "x": "msa_sources/x"})
+
+        with pytest.raises(MixedMsaDirError, match="--organized-msa-dir"):
+            read_msa_index(msa_dir)
+
+    @pytest.mark.parametrize("value", ["/abs/path", "../elsewhere", "msa_sources/../../out"])
+    def test_absolute_or_escaping_value_errors(self, tmp_path, value):
+        """Store folders stay inside the MSA folder, so the folder can be moved."""
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, {"x": value})
+
+        with pytest.raises(MsaSourcesError, match="msa_index.yml"):
+            read_msa_index(msa_dir)
+
+    def test_rejected_name_in_index_errors(self, tmp_path):
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, {"dummy": "msa_sources/dummy"})
+
+        with pytest.raises(MsaSourcesError, match="dummy"):
+            read_msa_index(msa_dir)
+
+    def test_malformed_index_errors(self, tmp_path):
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, ["not", "a", "mapping"])
+
+        with pytest.raises(MsaSourcesError, match="msa_index.yml"):
+            read_msa_index(msa_dir)
+
+    def test_add_merges_and_newer_wins(self, tmp_path):
+        msa_dir = tmp_path / "msas"
+        add_to_msa_index(msa_dir, {"a": "msa_sources/a", "b": "msa_sources/old_b"})
+        add_to_msa_index(msa_dir, {"b": "msa_sources/b", "c": "msa_sources/c"})
+
+        assert yaml.safe_load((msa_dir / "msa_index.yml").read_text()) == {
+            "a": "msa_sources/a", "b": "msa_sources/b", "c": "msa_sources/c",
+        }
+
+    def test_add_refuses_to_write_a_mix(self, tmp_path):
+        msa_dir = tmp_path / "msas"
+        index = _write_index(msa_dir, {"colabfold_main": "unpaired"})
+        before = index.read_text()
+
+        with pytest.raises(MixedMsaDirError):
+            add_to_msa_index(msa_dir, {"x": "msa_sources/x"})
+
+        assert index.read_text() == before
+
+    def test_add_to_legacy_folder_keeps_colabfold_main(self, tmp_path):
+        """Adding to a legacy folder starts from its implicit colabfold_main entry."""
+        msa_dir = tmp_path / "msas"
+        (msa_dir / "unpaired").mkdir(parents=True)
+
+        add_to_msa_index(msa_dir, {"colabfold_main": "unpaired"})
+
+        assert yaml.safe_load((msa_dir / "msa_index.yml").read_text()) == {"colabfold_main": "unpaired"}
+
+    def test_add_refuses_malformed_existing_index(self, tmp_path):
+        """A hand-broken index is reported, not silently overwritten."""
+        msa_dir = tmp_path / "msas"
+        index = _write_index(msa_dir, ["not", "a", "mapping"])
+        before = index.read_text()
+
+        with pytest.raises(MsaSourcesError, match="msa_index.yml"):
+            add_to_msa_index(msa_dir, {"x": "msa_sources/x"})
+
+        assert index.read_text() == before
