@@ -86,6 +86,7 @@ posebusters = "==0.6.5"
 sphinx = ">=8"
 myst-parser = ">=4"
 furo = ">=2024.8.6"
+sphinxcontrib-mermaid = ">=1"
 
 [feature.docs.tasks]
 docs = "sphinx-build -E -W docs/source docs/_build/html"

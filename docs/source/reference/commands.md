@@ -1,6 +1,6 @@
 # Commands and options
 
-Run each command with `pixi run <command>`. `finetune-pipeline` runs the six stage commands for you, so you only need those to rerun one stage.
+Run each command with `pixi run <command>`. `finetune-pipeline` runs the six stage commands for you, so you only need those to rerun one stage. The [pipeline diagram](../explanation/how-it-works.md#the-three-steps) shows the order they run in and which flags skip them.
 
 ## `finetune-pipeline`
 
