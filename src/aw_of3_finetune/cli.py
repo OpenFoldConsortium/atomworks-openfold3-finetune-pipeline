@@ -22,7 +22,13 @@ from openfold3.core.data.io.dataset_cache import read_datacache, write_datacache
 from pydantic import ValidationError
 
 from aw_of3_finetune.cleanup import CleanupSettings, EmptyStructureError
-from aw_of3_finetune.constants import CLEANED_STRUCTURES_DIRNAME, COMPRESSED_STRUCTURES_DIRNAME, PREP_DROPPED_FILE
+from aw_of3_finetune.constants import (
+    CLEANED_STRUCTURES_DIRNAME,
+    COLABFOLD_UNPAIRED_DIRNAME,
+    COMPRESSED_STRUCTURES_DIRNAME,
+    ORGANIZED_MSAS_DIRNAME,
+    PREP_DROPPED_FILE,
+)
 from aw_of3_finetune.ligand_inputs import CcdCodeCollisionError, read_ligand_table
 from aw_of3_finetune.ligand_names import SignaturesByName, format_name_conflicts, name_conflicts
 from aw_of3_finetune.msa import (
@@ -31,6 +37,7 @@ from aw_of3_finetune.msa import (
     collect_complex_queries,
     collect_msa_queries,
 )
+from aw_of3_finetune.msa_sources import MsaSourcesError, add_to_msa_index, import_user_msas, msa_dir_kind
 from aw_of3_finetune.prepare_inputs import (
     DEFAULT_RELEASE_DATE,
     PREPARE_DROPPED_FILE,
@@ -44,6 +51,7 @@ from aw_of3_finetune.report.user import ReportError, check_report_dir, write_use
 from aw_of3_finetune.report.validity import ValidityInputs
 from aw_of3_finetune.pipeline import (
     ChainMismatchError,
+    ReorganizeSummary,
     build_manifest,
     check_chain_consistency,
     prepare_augmented_cif,
@@ -139,6 +147,106 @@ cleanup_config_option = click.option(
 )
 
 
+# import-msas lists at most this many unmatched files per source.
+UNMATCHED_LISTING_CAP = 20
+
+
+def organized_msa_dir_option(*, exists: bool, help: str) -> Callable[[Callable], Callable]:
+    """Add --organized-msa-dir (parameter ``msa_dir``) plus the hidden, deprecated --msa-dir alias.
+
+    The option's default is None; commands resolve it with resolve_organized_msa_dir.
+
+    Args:
+        exists: Whether a path passed on the command line must already exist.
+        help: Help text for --organized-msa-dir.
+
+    Returns:
+        A decorator for a click command callback.
+    """
+    path_type = click.Path(path_type=Path, exists=exists, file_okay=False)
+
+    def decorator(command: Callable) -> Callable:
+        @wraps(command)
+        def wrapper(*args, legacy_msa_dir: Path | None = None, **kwargs):
+            if legacy_msa_dir is not None:
+                if kwargs.get("msa_dir") is not None:
+                    raise click.UsageError(
+                        "Pass --organized-msa-dir only; --msa-dir is its deprecated old name."
+                    )
+                click.echo("--msa-dir is deprecated; use --organized-msa-dir", err=True)
+                kwargs["msa_dir"] = legacy_msa_dir
+            return command(*args, **kwargs)
+
+        wrapper = click.option("--msa-dir", "legacy_msa_dir", default=None, hidden=True, type=path_type)(wrapper)
+        return click.option(
+            "--organized-msa-dir", "msa_dir", default=None, type=path_type,
+            help=f"{help} Default: <output-dir>/{ORGANIZED_MSAS_DIRNAME}.",
+        )(wrapper)
+
+    return decorator
+
+
+def resolve_organized_msa_dir(msa_dir: Path | None, output_dir: Path, *, must_exist: bool) -> Path | None:
+    """Return the MSA folder: the one passed, else <output-dir>/organized_msas.
+
+    Args:
+        msa_dir: --organized-msa-dir as given, or None.
+        output_dir: Pipeline output directory.
+        must_exist: If True, the default is returned only when it exists (None otherwise).
+
+    Returns:
+        The folder, or None when it was not given and the default does not exist (must_exist only).
+    """
+    if msa_dir is not None:
+        return msa_dir
+    default = output_dir / ORGANIZED_MSAS_DIRNAME
+    if must_exist and not default.is_dir():
+        return None
+    return default
+
+
+def _require_organized_msa_dir(msa_dir: Path | None, output_dir: Path) -> Path:
+    """Resolve the MSA folder for a command that cannot run without one.
+
+    Args:
+        msa_dir: --organized-msa-dir as given, or None.
+        output_dir: Pipeline output directory.
+
+    Returns:
+        The existing folder.
+
+    Raises:
+        click.UsageError: If the folder does not exist.
+    """
+    resolved = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=False)
+    if not resolved.is_dir():
+        raise click.UsageError(
+            f"No MSA folder at {resolved}. Pass --organized-msa-dir, or create MSAs there first "
+            "with generate-msas."
+        )
+    return resolved
+
+
+def _reorganize_message(summary: ReorganizeSummary, of3_msa_dir: Path) -> str:
+    """One line saying what reorganize_msas_for_of3 wrote, removed and could not find.
+
+    Args:
+        summary: Its result.
+        of3_msa_dir: Where it wrote.
+
+    Returns:
+        E.g. "Reorganized 3 MSA(s) for OF3 under X (colabfold_main: 3); 1 sequence(s) missing an MSA".
+    """
+    total = sum(summary.written.values())
+    per_source = ", ".join(f"{name}: {n}" for name, n in summary.written.items())
+    message = f"Reorganized {total} MSA(s) for OF3 under {of3_msa_dir}" + (f" ({per_source})" if per_source else "")
+    if summary.removed:
+        message += f"; removed {summary.removed} stale MSA(s)"
+    if summary.missing:
+        message += f"; {summary.missing} sequence(s) missing an MSA"
+    return message
+
+
 def _check_paired_dirs_writable(
     complexes: dict[str, list[str]], msa_dir: Path, skip_existing: bool
 ) -> None:
@@ -170,7 +278,7 @@ def _check_paired_dirs_writable(
         )
     raise click.UsageError(
         f"{len(existing)} paired MSA(s) already exist under {msa_dir / 'paired'}:\n  "
-        f"{listing}\nRerun with --skip-existing to reuse them, or use a fresh --msa-dir."
+        f"{listing}\nRerun with --skip-existing to reuse them, or use a fresh --organized-msa-dir."
     )
 
 
@@ -188,12 +296,10 @@ def _check_paired_dirs_writable(
     help="Output directory. Augmented CIFs go to <output-dir>/cleaned_structures/, "
     "manifest to <output-dir>/manifest.json.",
 )
-@click.option(
-    "--msa-dir",
-    default=None,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
-    help="MSA alignments directory ({msa-dir}/{rep_id}/*.a3m). "
-    "If provided, chains missing MSAs are reported as warnings.",
+@organized_msa_dir_option(
+    exists=True,
+    help="MSA folder. If it exists, chains with no MSA under "
+    "<organized-msa-dir>/of3_alignments/<rep_id>/ are reported as warnings.",
 )
 @click.option(
     "--template-cache-dir",
@@ -248,6 +354,7 @@ def finetune_prep(
     cif_paths = sorted(cif_dir.glob("*.cif"))
     if not cif_paths:
         raise click.UsageError(f"No .cif files found in {cif_dir}")
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=True)
 
     structures_dir = output_dir / CLEANED_STRUCTURES_DIRNAME
     structures_dir.mkdir(parents=True, exist_ok=True)
@@ -275,7 +382,7 @@ def finetune_prep(
         pdb_id = cif_path.stem.lower()
 
         if msa_dir is not None:
-            _warn_missing_msas(cif_path, pdb_id, msa_dir)
+            _warn_missing_msas(cif_path, pdb_id, msa_dir / "of3_alignments")
 
         # atomworks parses; OF3 only ingests what atomworks wrote (see
         # prepare_augmented_cif) -- the chain metadata is built from the same
@@ -416,7 +523,7 @@ def _warn_missing_msas(cif_path: Path, pdb_id: str, msa_dir: Path) -> None:
     Args:
         cif_path: Source mmCIF to read SEQRES sequences from.
         pdb_id: Structure ID, for the message.
-        msa_dir: Alignments directory laid out as ``{msa_dir}/{rep_id}/*.a3m``.
+        msa_dir: OF3 alignments directory laid out as ``{msa_dir}/{rep_id}/*.a3m``.
     """
     for label_asym_id, seq in chain_canonical_sequences(cif_path).items():
         rep_id = alignment_rep_id(seq)
@@ -444,16 +551,14 @@ def _warn_missing_msas(cif_path: Path, pdb_id: str, msa_dir: Path) -> None:
     help="Path to write the full dataset cache JSON. "
     "Defaults to <output-dir>/dataset_cache.json.",
 )
-@click.option(
-    "--msa-dir",
-    default=None,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
-    help="MSA directory previously written by generate-msas. If provided, unpaired "
-    "MSAs are also reorganized into {msa-dir}/of3_alignments/{rep_id}/colabfold_main.a3m "
+@organized_msa_dir_option(
+    exists=True,
+    help="MSA folder written by generate-msas. If it exists, unpaired MSAs are also "
+    "reorganized into <organized-msa-dir>/of3_alignments/<rep_id>/colabfold_main.a3m "
     "-- the plain-text, directory-per-rep_id layout OF3's WeightedPDBDataset "
     "(alignments_directory) expects, since it cannot read atomworks' native "
-    "gzipped/sharded layout directly. Pass {msa-dir}/of3_alignments as "
-    "alignments_directory to WeightedPDBDataset, not --msa-dir itself.",
+    "gzipped/sharded layout directly. Pass <organized-msa-dir>/of3_alignments as "
+    "alignments_directory to WeightedPDBDataset, not the folder itself.",
 )
 @_with_pipeline_logs
 def materialize_dataset_cache(
@@ -482,13 +587,14 @@ def materialize_dataset_cache(
     n = len(list(cif_dir.glob("*.cif")))
     click.echo(f"Dataset cache: {cache_output} ({n} structure(s))")
 
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=True)
     if msa_dir is not None:
         of3_msa_dir = msa_dir / "of3_alignments"
-        written, missing = reorganize_msas_for_of3(output_dir, msa_dir, of3_msa_dir)
-        click.echo(
-            f"Reorganized {written} MSA(s) for OF3 under {of3_msa_dir}"
-            + (f" ({missing} sequence(s) missing an MSA)" if missing else "")
-        )
+        try:
+            summary = reorganize_msas_for_of3(output_dir, msa_dir, of3_msa_dir)
+        except MsaSourcesError as error:
+            raise click.ClickException(str(error)) from error
+        click.echo(_reorganize_message(summary, of3_msa_dir))
 
 
 @click.command()
@@ -500,13 +606,11 @@ def materialize_dataset_cache(
     "of3_compressed_structures/, reference_mols/ -- i.e. materialize-dataset-cache and "
     "save_structures_as_npz must already have run).",
 )
-@click.option(
-    "--msa-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
-    help="MSA directory previously written by generate-msas / reorganized by "
-    "materialize-dataset-cache. Required: alignments_directory in the generated "
-    "config points at {msa-dir}/of3_alignments, and OF3's own TrainingDatasetPaths "
+@organized_msa_dir_option(
+    exists=True,
+    help="MSA folder written by generate-msas and reorganized by "
+    "materialize-dataset-cache. It must exist: alignments_directory in the generated "
+    "config points at <organized-msa-dir>/of3_alignments, and OF3's own TrainingDatasetPaths "
     "schema requires exactly one alignment path to be set -- there's no valid "
     "config without it.",
 )
@@ -531,7 +635,7 @@ def materialize_dataset_cache(
 @_with_pipeline_logs
 def generate_train_config(
     output_dir: Path,
-    msa_dir: Path,
+    msa_dir: Path | None,
     config_output: Path | None,
     wandb_project: str | None,
     wandb_entity: str | None,
@@ -544,6 +648,7 @@ def generate_train_config(
     Run from openfold-3 with:
     pixi run -e openfold3-cuda12 run_openfold train --runner-yaml=<config-output>
     """
+    msa_dir = _require_organized_msa_dir(msa_dir, output_dir)
     config_path = write_train_config(
         output_dir, msa_dir, config_output,
         wandb_project=wandb_project, wandb_entity=wandb_entity, wandb_experiment_name=wandb_name,
@@ -567,11 +672,9 @@ def generate_train_config(
     type=click.Path(path_type=Path, exists=True, dir_okay=False),
     help="CSV with header id,split. split is val or test; unlisted entries go to train.",
 )
-@click.option(
-    "--msa-dir",
-    default=None,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
-    help="MSA directory. If given, (re)writes <output-dir>/train.yml with default settings and the "
+@organized_msa_dir_option(
+    exists=True,
+    help="MSA folder. If it exists, (re)writes <output-dir>/train.yml with default settings and the "
     "validation section. For wandb or custom options, run generate-train-config instead.",
 )
 @click.pass_context
@@ -589,17 +692,18 @@ def split_dataset(ctx: click.Context, output_dir: Path, split_csv: Path, msa_dir
 
     \b
     Examples:
-      split-dataset --output-dir out/ --split-csv my_split.csv --msa-dir msas/
+      split-dataset --output-dir out/ --split-csv my_split.csv --organized-msa-dir msas/
       split-dataset --output-dir out/ --split-csv my_split.csv
-      generate-train-config --output-dir out/ --msa-dir msas/
+      generate-train-config --output-dir out/ --organized-msa-dir msas/
     """
     result = split_dataset_cache(output_dir, split_csv)
     for warning in result.warnings:
         click.echo(warning, err=True)
     click.echo(result.report)
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=True)
     if msa_dir is None:
         click.echo(
-            f"Next: generate-train-config --output-dir {output_dir} --msa-dir <msa-dir> "
+            f"Next: generate-train-config --output-dir {output_dir} --organized-msa-dir <dir> "
             "(adds the validation section to train.yml)"
         )
         return
@@ -622,13 +726,11 @@ def split_dataset(ctx: click.Context, output_dir: Path, split_csv: Path, msa_dir
     help="Pipeline output directory produced by finetune-prep "
     "(must contain manifest.json and cleaned_structures/).",
 )
-@click.option(
-    "--msa-dir",
-    required=True,
-    type=click.Path(path_type=Path),
-    help="Directory to write MSA files. "
-    "Output layout: unpaired <msa-dir>/unpaired/<shard>/<hash>.a3m.gz, "
-    "paired <msa-dir>/paired/<shard-of-complex_id>/<complex_id>/<hash>.a3m.gz.",
+@organized_msa_dir_option(
+    exists=False,
+    help="Folder to write MSA files to. "
+    "Output layout: unpaired <organized-msa-dir>/unpaired/<shard>/<hash>.a3m.gz, "
+    "paired <organized-msa-dir>/paired/<shard-of-complex_id>/<complex_id>/<hash>.a3m.gz.",
 )
 @click.option(
     "--server",
@@ -653,7 +755,7 @@ def split_dataset(ctx: click.Context, output_dir: Path, split_csv: Path, msa_dir
     default=True,
     show_default=True,
     help="Also request template hits (PDB70) in the unpaired query, written to "
-    "<msa-dir>/templates/<shard>/<hash>.m8 (sequences with no hits get no file). "
+    "<organized-msa-dir>/templates/<shard>/<hash>.m8 (sequences with no hits get no file). "
     "Resolve their structures afterwards with fetch-templates. --skip-existing stays "
     "keyed on unpaired MSAs, so sequences whose MSAs predate enabling templates are "
     "not re-queried: rerun those without --skip-existing.",
@@ -661,7 +763,7 @@ def split_dataset(ctx: click.Context, output_dir: Path, split_csv: Path, msa_dir
 @_with_pipeline_logs
 def generate_msas(
     output_dir: Path,
-    msa_dir: Path,
+    msa_dir: Path | None,
     server: str,
     user_agent: str,
     skip_existing: bool,
@@ -679,6 +781,16 @@ def generate_msas(
             "Check that the CIFs have entity_poly SEQRES records."
         )
 
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=False)
+    try:
+        kind = msa_dir_kind(msa_dir)
+    except MsaSourcesError as error:
+        raise click.ClickException(str(error)) from error
+    if kind == "user":
+        raise click.ClickException(
+            f"{msa_dir} holds user-provided MSAs (import-msas); one MSA folder holds ColabFold or "
+            "user MSAs, not both. Use a fresh --organized-msa-dir."
+        )
     msa_dir.mkdir(parents=True, exist_ok=True)
 
     seqs = list(queries.values())
@@ -707,6 +819,7 @@ def generate_msas(
     _check_paired_dirs_writable(complexes, msa_dir, skip_existing)
 
     if not seqs and not complexes:
+        add_to_msa_index(msa_dir, {"colabfold_main": COLABFOLD_UNPAIRED_DIRNAME})
         click.echo("All MSAs already exist (--skip-existing). Nothing to do.")
         return
 
@@ -722,9 +835,87 @@ def generate_msas(
         user_agent=user_agent,
         host_url=server,
     )
+    add_to_msa_index(msa_dir, {"colabfold_main": COLABFOLD_UNPAIRED_DIRNAME})
     click.echo(f"Done. Unpaired under {msa_dir / 'unpaired'}, paired under {msa_dir / 'paired'}.")
     if templates:
         click.echo(f"Template hits under {msa_dir / 'templates'}; fetch-templates resolves their structures.")
+
+
+@click.command()
+@click.option(
+    "--output-dir",
+    required=True,
+    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    help="Pipeline output directory produced by finetune-prep "
+    "(must contain manifest.json and cleaned_structures/).",
+)
+@organized_msa_dir_option(
+    exists=False,
+    help="Folder to import the MSAs into: <organized-msa-dir>/msa_sources/<source>/, the source "
+    "index msa_index.yml, and of3_alignments/ for OpenFold3. Must not hold ColabFold MSAs.",
+)
+@click.option(
+    "--msa-sources",
+    "manifest_path",
+    required=True,
+    type=click.Path(path_type=Path, exists=True),
+    help="Either a YAML/JSON sources manifest mapping each MSA source name (the OpenFold3 alignment "
+    "file name, e.g. uniref90_hits) to a directory or glob of your own A3M files, or the "
+    "--organized-msa-dir of an earlier generate-msas/import-msas run, to reuse (link) its MSAs. "
+    "A folder of your own A3M files needs a manifest. Files are matched to chains by their first "
+    "(query) sequence.",
+)
+@_with_pipeline_logs
+def import_msas(output_dir: Path, msa_dir: Path | None, manifest_path: Path) -> None:
+    """Import your own MSAs instead of querying the ColabFold server.
+
+    Every file is checked first (query sequence, duplicates, OpenFold3's own A3M and
+    pairing-header parsers); nothing is copied if any check fails. Then of3_alignments/
+    is brought up to date, so generate-train-config can run next.
+    """
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=False)
+    try:
+        summary = import_user_msas(output_dir, msa_dir, manifest_path)
+    except MsaSourcesError as error:
+        raise click.ClickException(str(error)) from error
+    for name, store in summary.linked.items():
+        click.echo(f"{name}: linked {store}, covers {summary.covered[name]} dataset sequence(s)")
+    if summary.linked:
+        click.echo(
+            "Linked, not copied: keep that folder where it is. Rebuilding of3_alignments/ "
+            "(materialize-dataset-cache, or rerunning finetune-pipeline) reads the MSAs from it."
+        )
+    for scan in summary.scans:
+        click.echo(
+            f"{scan.source}: imported {len(scan.files)} file(s), "
+            f"covers {summary.covered[scan.source]} dataset sequence(s)"
+        )
+        if scan.unmatched:
+            shown = [str(path) for path in scan.unmatched[:UNMATCHED_LISTING_CAP]]
+            more = len(scan.unmatched) - len(shown)
+            listing = "\n    ".join(shown + ([f"... and {more} more"] if more else []))
+            click.echo(
+                f"  WARNING: {scan.source}: {len(scan.unmatched)} file(s) match no sequence in this "
+                f"dataset and were skipped. If one should match, its query row is likely not the chain's SEQRES "
+                f"sequence:\n    {listing}",
+                err=True,
+            )
+        if scan.ignored:
+            listing = "\n    ".join(str(p) for p in scan.ignored)
+            click.echo(f"  {scan.source}: ignored {len(scan.ignored)} non-A3M file(s):\n    {listing}", err=True)
+    click.echo(_reorganize_message(summary.reorganize, msa_dir / "of3_alignments"))
+    if summary.other_sources:
+        click.echo(
+            f"WARNING: {msa_dir / 'msa_index.yml'} also lists {', '.join(summary.other_sources)} from an "
+            "earlier import; they stay in training. To remove one, delete its line from msa_index.yml "
+            "and its msa_sources/<source>/ folder, then rerun import-msas.",
+            err=True,
+        )
+    if summary.reorganize.missing:
+        click.echo(
+            f"WARNING: {summary.reorganize.missing} sequence(s) have no MSA from any source",
+            err=True,
+        )
 
 
 def _drop_entries(output_dir: Path, cache_path: Path, failing: set[str]) -> None:
@@ -755,12 +946,11 @@ def _drop_entries(output_dir: Path, cache_path: Path, failing: set[str]) -> None
               help="Pipeline output directory (dataset_cache.json, of3_compressed_structures/, ...).")
 @click.option("--cif-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
               help="Directory of the original input mmCIF files.")
-@click.option("--msa-dir", default=None, type=click.Path(path_type=Path, exists=True, file_okay=False),
-              help="MSA directory (holds of3_alignments/ and template_structures/).")
+@organized_msa_dir_option(exists=True, help="MSA folder (holds of3_alignments/ and template_structures/), if it exists.")
 @click.option("--template-cache-dir", default=None, type=click.Path(path_type=Path, exists=True, file_okay=False),
-              help="OF3 template cache directory ({rep_id}.npz). Defaults to <msa-dir>/of3_template_data/template_cache.")
+              help="OF3 template cache directory ({rep_id}.npz). Defaults to <organized-msa-dir>/of3_template_data/template_cache.")
 @click.option("--template-structure-dir", default=None, type=click.Path(path_type=Path, exists=True, file_okay=False),
-              help="Template structure directory. Defaults to <msa-dir>/template_structures.")
+              help="Template structure directory. Defaults to <organized-msa-dir>/template_structures.")
 @click.option("--ccd-path", default=None, type=click.Path(path_type=Path, dir_okay=False),
               help="Chemical Component Dictionary mmCIF. Reserved; currently unused by checks.")
 @click.option("--cache-path", default=None, type=click.Path(path_type=Path, dir_okay=False),
@@ -792,6 +982,7 @@ def validate(
 
     Exits 1 if any entry has an error, unless --allow-errors drops those entries.
     """
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=True)
     if template_structure_dir is None and msa_dir is not None:
         template_structure_dir = msa_dir / TEMPLATE_STRUCTURES_DIRNAME
     if template_cache_dir is None and msa_dir is not None:
@@ -909,13 +1100,20 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     help="Output directory for every pipeline artifact: augmented CIFs, manifest, "
     "reference mols, dataset cache, and NPZ structure files.",
 )
+@organized_msa_dir_option(
+    exists=False,
+    help="MSA folder. If passed, runs generate-msas (live ColabFold queries) into it. If "
+    "omitted, ColabFold is never contacted and the MSA stage is skipped; an "
+    "<output-dir>/organized_msas folder left by an earlier run is still used by the later stages.",
+)
 @click.option(
-    "--msa-dir",
+    "--msa-sources",
     default=None,
-    type=click.Path(path_type=Path),
-    help="MSA directory. If given, runs generate-msas (live ColabFold queries) and "
-    "reorganizes unpaired MSAs for OF3. If omitted, the MSA stage is skipped "
-    "entirely -- useful if MSAs already exist from a previous run.",
+    type=click.Path(path_type=Path, exists=True),
+    help="Use existing MSAs instead of querying ColabFold: either a YAML/JSON sources manifest for your "
+    "own A3M files, or the --organized-msa-dir of an earlier run, to reuse (link) its MSAs (see "
+    "import-msas). They are imported into --organized-msa-dir (default "
+    "<output-dir>/organized_msas). ColabFold is never contacted, and the template stages are skipped.",
 )
 @click.option(
     "--ccd-path",
@@ -945,20 +1143,20 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     "--server",
     default="https://api.colabfold.com",
     show_default=True,
-    help="ColabFold MSA server URL. Only used if --msa-dir is given.",
+    help="ColabFold MSA server URL. Only used if --organized-msa-dir is given.",
 )
 @click.option(
     "--user-agent",
     default="aw-of3-finetune",
     show_default=True,
-    help="User-agent string sent with API requests. Only used if --msa-dir is given.",
+    help="User-agent string sent with API requests. Only used if --organized-msa-dir is given.",
 )
 @click.option(
     "--skip-existing",
     is_flag=True,
     default=False,
-    help="Skip sequences/complexes that already have an MSA. Only used if --msa-dir "
-    "is given.",
+    help="Skip sequences/complexes that already have an MSA. Only used if "
+    "--organized-msa-dir is given.",
 )
 @click.option(
     "--template-cutoff-date",
@@ -973,8 +1171,8 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     default=True,
     show_default=True,
     help="Request template hits in generate-msas, then run fetch-templates and "
-    "preprocess-templates (downloads hit structures from RCSB). Only used if --msa-dir "
-    "is given.",
+    "preprocess-templates (downloads hit structures from RCSB). Only used if "
+    "--organized-msa-dir is given.",
 )
 @click.option(
     "--cache-output",
@@ -1022,6 +1220,7 @@ def finetune_pipeline(
     cif_dir: Path,
     output_dir: Path,
     msa_dir: Path | None,
+    msa_sources: Path | None,
     ccd_path: Path,
     template_cache_dir: Path | None,
     name: str,
@@ -1045,12 +1244,23 @@ def finetune_pipeline(
 ) -> None:
     """Run every pipeline stage end-to-end over a directory of CIFs.
 
-    finetune-prep -> generate-msas -> fetch-templates -> materialize-dataset-cache ->
+    finetune-prep -> generate-msas (or import-msas with --msa-sources) -> fetch-templates ->
+    materialize-dataset-cache ->
     preprocess-templates -> NPZ -> split-dataset (with --split-csv) -> generate-train-config ->
     validate -> report. All but finetune-prep, materialize, NPZ, validate and report need
-    --msa-dir; the template stages also need --templates.
+    an MSA folder (--organized-msa-dir, or an existing <output-dir>/organized_msas); the
+    template stages also need --templates and MSAs generated in this run.
     """
-    run_templates = msa_dir is not None and templates
+    if msa_sources is not None:
+        _refuse_colabfold_flags_with_msa_sources(ctx, templates)
+    # Only an explicit --organized-msa-dir without --msa-sources contacts ColabFold.
+    run_colabfold = msa_dir is not None and msa_sources is None
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=msa_sources is None)
+    run_templates = run_colabfold and templates
+    templates_skipped = (
+        "templates with --msa-sources are not supported yet" if msa_sources is not None
+        else "no --organized-msa-dir or --no-templates"
+    )
     if split_csv is not None:
         default_cache = output_dir / DATASET_CACHE_NAME
         if cache_output is not None and cache_output.resolve() != default_cache.resolve():
@@ -1076,7 +1286,7 @@ def finetune_pipeline(
         finetune_prep,
         cif_dir=cif_dir,
         output_dir=output_dir,
-        msa_dir=None,  # MSAs don't exist yet at this point -- nothing to warn about.
+        msa_dir=None,  # finetune-prep checks an existing <output-dir>/organized_msas itself.
         template_cache_dir=template_cache_dir,
         ccd_path=ccd_path,
         name=name,
@@ -1085,7 +1295,10 @@ def finetune_pipeline(
         cleanup_settings=cleanup_settings,
     )
 
-    if msa_dir is not None:
+    if msa_sources is not None:
+        click.echo("\n=== Stage 2/10: import-msas ===")
+        ctx.invoke(import_msas, output_dir=output_dir, msa_dir=msa_dir, manifest_path=msa_sources)
+    elif run_colabfold:
         click.echo("\n=== Stage 2/10: generate-msas ===")
         ctx.invoke(
             generate_msas,
@@ -1097,13 +1310,13 @@ def finetune_pipeline(
             templates=templates,
         )
     else:
-        click.echo("\n=== Stage 2/10: generate-msas -- skipped (no --msa-dir given) ===")
+        click.echo("\n=== Stage 2/10: generate-msas -- skipped (no --organized-msa-dir given) ===")
 
     if run_templates:
         click.echo("\n=== Stage 3/10: fetch-templates ===")
         ctx.invoke(fetch_templates, output_dir=output_dir, msa_dir=msa_dir)
     else:
-        click.echo("\n=== Stage 3/10: fetch-templates -- skipped (no --msa-dir or --no-templates) ===")
+        click.echo(f"\n=== Stage 3/10: fetch-templates -- skipped ({templates_skipped}) ===")
 
     click.echo("\n=== Stage 4/10: materialize-dataset-cache ===")
     ctx.invoke(
@@ -1124,7 +1337,7 @@ def finetune_pipeline(
         )
     else:
         click.echo(
-            "\n=== Stage 5/10: preprocess-templates -- skipped (no --msa-dir or --no-templates) ==="
+            f"\n=== Stage 5/10: preprocess-templates -- skipped ({templates_skipped}) ==="
         )
 
     click.echo("\n=== Stage 6/10: NPZ structure files ===")
@@ -1152,7 +1365,7 @@ def finetune_pipeline(
         )
     else:
         click.echo(
-            "\n=== Stage 8/10: generate-train-config -- skipped (no --msa-dir given; "
+            "\n=== Stage 8/10: generate-train-config -- skipped (no MSA folder; "
             "OF3's training schema requires a real alignments directory, so no "
             "valid train.yml can be produced without one) ==="
         )
@@ -1192,6 +1405,30 @@ def finetune_pipeline(
         raise validate_exit
 
     click.echo("\nDone.")
+
+
+def _refuse_colabfold_flags_with_msa_sources(ctx: click.Context, templates: bool) -> None:
+    """Refuse options that would silently do nothing next to --msa-sources.
+
+    Args:
+        ctx: finetune-pipeline's context.
+        templates: The --templates/--no-templates value (an explicit --no-templates is fine).
+
+    Raises:
+        click.UsageError: Naming the first such option given on the command line.
+    """
+    explicit = {
+        name for name in ("templates", "server", "user_agent", "skip_existing")
+        if ctx.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE
+    }
+    if "templates" in explicit and not templates:
+        explicit.discard("templates")
+    for name, flag in (("templates", "--templates"), ("server", "--server"),
+                       ("user_agent", "--user-agent"), ("skip_existing", "--skip-existing")):
+        if name in explicit:
+            reason = ("templates with --msa-sources are not supported yet" if name == "templates"
+                      else "it only applies to ColabFold, which --msa-sources replaces")
+            raise click.UsageError(f"{flag} cannot be used with --msa-sources: {reason}.")
 
 
 def _warn_report_failed(inputs: ValidityInputs, error: Exception) -> None:
@@ -1270,12 +1507,7 @@ def finetune_report(
     help="Pipeline output directory produced by finetune-prep (manifest.json + "
     "cleaned_structures/); only this dataset's sequences are processed.",
 )
-@click.option(
-    "--msa-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
-    help="MSA directory written by generate-msas (with templates on).",
-)
+@organized_msa_dir_option(exists=True, help="MSA folder written by generate-msas (with templates on).")
 @click.option(
     "--max-hits",
     default=50,
@@ -1294,12 +1526,14 @@ def finetune_report(
 )
 @_with_pipeline_logs
 def fetch_templates(
-    output_dir: Path, msa_dir: Path, max_hits: int, pdb_mirror_path: Path | None
+    output_dir: Path, msa_dir: Path | None, max_hits: int, pdb_mirror_path: Path | None
 ) -> None:
     """Resolve template structures and lay out ColabFold template hits for OF3.
 
-    Writes <msa-dir>/template_structures/ and <msa-dir>/of3_template_alignments/; safe to rerun.
+    Writes <organized-msa-dir>/template_structures/ and <organized-msa-dir>/of3_template_alignments/;
+    safe to rerun.
     """
+    msa_dir = _require_organized_msa_dir(msa_dir, output_dir)
     try:
         summary = fetch_templates_for_dataset(
             output_dir, msa_dir, max_hits=max_hits, pdb_mirror_path=pdb_mirror_path
@@ -1328,12 +1562,9 @@ def fetch_templates(
     help="Pipeline output directory (manifest.json, cleaned_structures/, and dataset_cache.json "
     "from materialize-dataset-cache).",
 )
-@click.option(
-    "--msa-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
-    help="MSA directory after fetch-templates (template_structures/ and "
-    "of3_template_alignments/).",
+@organized_msa_dir_option(
+    exists=True,
+    help="MSA folder after fetch-templates (template_structures/ and of3_template_alignments/).",
 )
 @click.option(
     "--cache-file",
@@ -1405,7 +1636,7 @@ def fetch_templates(
 @_with_pipeline_logs
 def preprocess_templates(
     output_dir: Path,
-    msa_dir: Path,
+    msa_dir: Path | None,
     cache_file: Path | None,
     min_release_date_diff: int,
     max_release_date,
@@ -1421,8 +1652,9 @@ def preprocess_templates(
     """Build OF3's template cache from fetch-templates' output and add template_ids.
 
     Drops hits failing OF3's template sequence filters, then runs OpenFold3's train-mode
-    template preprocessing into <msa-dir>/of3_template_data/.
+    template preprocessing into <organized-msa-dir>/of3_template_data/.
     """
+    msa_dir = _require_organized_msa_dir(msa_dir, output_dir)
     if template_cutoff_date is not None and max_release_date is not None:
         raise click.UsageError("--template-cutoff-date replaces --max-release-date; give one")
     if template_cutoff_date is not None and not sequence_filter:

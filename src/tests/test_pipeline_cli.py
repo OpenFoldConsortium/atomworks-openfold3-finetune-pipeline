@@ -50,6 +50,7 @@ from aw_of3_finetune.cli import (
     materialize_dataset_cache,
 )
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
+from aw_of3_finetune.msa_sources import MixedMsaDirError
 from aw_of3_finetune.split import split_dataset_cache, split_paths
 from aw_of3_finetune.training_config import StaleSplitError, build_train_config
 from aw_of3_finetune.pipeline import (
@@ -369,11 +370,11 @@ class TestReorganizeMsasForOf3:
         _make_unpaired_msa_gz(seq, tmp_path / "msas")
 
         of3_msa_dir = tmp_path / "msas" / "of3_alignments"
-        written, missing = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
 
         # One MSA was written and none were missing.
-        assert written == 1
-        assert missing == 0
+        assert summary.written == {"colabfold_main": 1}
+        assert summary.missing == 0
 
         # The file holds the query-only MSA as plain text.
         out_file = of3_msa_dir / rep_id / "colabfold_main.a3m"
@@ -389,8 +390,8 @@ class TestReorganizeMsasForOf3:
         _make_unpaired_msa_gz(seq, tmp_path / "msas")
 
         of3_msa_dir = tmp_path / "msas" / "of3_alignments"
-        written, _ = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
-        assert written == 1
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        assert summary.written == {"colabfold_main": 1}
 
         rep_id = alignment_rep_id(seq)
         msas = parse_msas_direct(standardize_filepaths(of3_msa_dir / rep_id))
@@ -404,11 +405,11 @@ class TestReorganizeMsasForOf3:
         output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
         of3_msa_dir = tmp_path / "msas" / "of3_alignments"
 
-        written, missing = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
 
         # Nothing was written; the one chain's MSA is counted as missing.
-        assert written == 0
-        assert missing == 1
+        assert sum(summary.written.values()) == 0
+        assert summary.missing == 1
 
         # No MSA directory content was created.
         assert not of3_msa_dir.exists() or not list(of3_msa_dir.iterdir())
@@ -424,11 +425,86 @@ class TestReorganizeMsasForOf3:
         second = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
 
         # First call writes the one MSA; second call finds it already reorganized and skips it.
-        assert first == (1, 0)
-        assert second == (0, 0)
+        assert (first.written, first.removed, first.missing) == ({"colabfold_main": 1}, 0, 0)
+        assert (second.written, second.removed, second.missing) == ({"colabfold_main": 0}, 0, 0)
+
+    def test_overwrites_changed_store_file(self, cif_protein_monomer, tmp_path):
+        """of3_alignments follows the store: a changed store file is rewritten."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        store_file = _make_unpaired_msa_gz(seq, tmp_path / "msas")
+        of3_msa_dir = tmp_path / "msas" / "of3_alignments"
+        reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+        with gzip.open(store_file, "wt") as f:
+            f.write(f">query\n{seq}\n>hit\n{seq}\n")
+
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+
+        assert summary.written == {"colabfold_main": 1}
+        assert (of3_msa_dir / alignment_rep_id(seq) / "colabfold_main.a3m").read_text() == (
+            f">query\n{seq}\n>hit\n{seq}\n"
+        )
+
+    def test_removes_file_without_store(self, cif_protein_monomer, tmp_path):
+        """An .a3m whose source no longer provides that sequence is removed."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        _make_unpaired_msa_gz(seq, tmp_path / "msas")
+        of3_msa_dir = tmp_path / "msas" / "of3_alignments"
+        stray = of3_msa_dir / alignment_rep_id(seq) / "old_source.a3m"
+        stray.parent.mkdir(parents=True)
+        stray.write_text(f">query\n{seq}\n")
+
+        summary = reorganize_msas_for_of3(output_dir, tmp_path / "msas", of3_msa_dir)
+
+        assert not stray.exists()
+        assert summary.removed == 1
+        assert (of3_msa_dir / alignment_rep_id(seq) / "colabfold_main.a3m").exists()
+
+    def test_indexed_store_missing_on_disk_warns(self, cif_protein_monomer, tmp_path, caplog):
+        """A source listed in the index whose store was deleted: warning, and its files removed."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        msa_dir = tmp_path / "msas"
+        msa_dir.mkdir()
+        (msa_dir / "msa_index.yml").write_text("gone: msa_sources/gone\n")
+        old = msa_dir / "of3_alignments" / alignment_rep_id(seq) / "gone.a3m"
+        old.parent.mkdir(parents=True)
+        old.write_text(f">query\n{seq}\n")
+
+        with caplog.at_level("WARNING"):
+            summary = reorganize_msas_for_of3(output_dir, msa_dir, msa_dir / "of3_alignments")
+
+        assert "msa_sources/gone" in caplog.text
+        assert not old.exists()
+        assert summary.removed == 1
+        assert summary.missing == 1
+
+    def test_leaves_non_dataset_rep_ids_alone(self, cif_protein_monomer, tmp_path):
+        """Directories of sequences not in this dataset are not touched."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        _make_unpaired_msa_gz(seq, tmp_path / "msas")
+        other = tmp_path / "msas" / "of3_alignments" / "zzzzzzzzzzz" / "x.a3m"
+        other.parent.mkdir(parents=True)
+        other.write_text(">q\nAAA\n")
+
+        reorganize_msas_for_of3(output_dir, tmp_path / "msas", tmp_path / "msas" / "of3_alignments")
+
+        assert other.exists()
+
+    def test_mixed_index_refused(self, cif_protein_monomer, tmp_path):
+        """A hand-written index mixing ColabFold and user MSAs is refused."""
+        output_dir = _make_output_dir_from_cif(cif_protein_monomer, "3u8v", tmp_path)
+        msa_dir = tmp_path / "msas"
+        msa_dir.mkdir()
+        (msa_dir / "msa_index.yml").write_text("colabfold_main: unpaired\nx: msa_sources/x\n")
+
+        with pytest.raises(MixedMsaDirError):
+            reorganize_msas_for_of3(output_dir, msa_dir, msa_dir / "of3_alignments")
 
     def test_cli_msa_dir_flag_reorganizes(self, cif_protein_monomer, tmp_path):
-        """materialize-dataset-cache --msa-dir reorganizes MSAs as a side effect."""
+        """materialize-dataset-cache --organized-msa-dir reorganizes MSAs as a side effect."""
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
@@ -444,7 +520,7 @@ class TestReorganizeMsasForOf3:
 
         result = CliRunner().invoke(materialize_dataset_cache, [
             "--output-dir", str(output_dir),
-            "--msa-dir", str(msa_dir),
+            "--organized-msa-dir", str(msa_dir),
         ], catch_exceptions=False)
 
         assert result.exit_code == 0, result.output
@@ -592,7 +668,7 @@ class TestFinetunePrep:
         )
 
     def test_msa_dir_warns_missing(self, cif_protein_monomer, tmp_path):
-        """--msa-dir provided but no MSA present → warning on stderr, not a failure."""
+        """--organized-msa-dir provided but no MSA present → warning on stderr, not a failure."""
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer)
@@ -603,7 +679,7 @@ class TestFinetunePrep:
         result = runner.invoke(finetune_prep, [
             "--cif-dir", str(cif_dir),
             "--output-dir", str(tmp_path / "out"),
-            "--msa-dir", str(empty_msa_dir),
+            "--organized-msa-dir", str(empty_msa_dir),
         ], catch_exceptions=False)
         # The run succeeds but warns about the missing MSA.
         assert result.exit_code == 0
@@ -851,10 +927,10 @@ class TestMsaWiring:
         assert protein_chains[0].alignment_representative_id == expected_rep_id
 
     def test_cli_no_warning_when_msa_present(self, cif_protein_monomer, tmp_path):
-        """--msa-dir with dummy A3Ms present → no WARNING in output."""
+        """--organized-msa-dir with dummy A3Ms under of3_alignments/ → no WARNING in output."""
         msa_dir = tmp_path / "msas"
         for seq in chain_canonical_sequences(cif_protein_monomer).values():
-            _make_dummy_msa(seq, msa_dir)
+            _make_dummy_msa(seq, msa_dir / "of3_alignments")
 
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
@@ -864,7 +940,7 @@ class TestMsaWiring:
         result = runner.invoke(finetune_prep, [
             "--cif-dir", str(cif_dir),
             "--output-dir", str(tmp_path / "out"),
-            "--msa-dir", str(msa_dir),
+            "--organized-msa-dir", str(msa_dir),
         ], catch_exceptions=False)
         # The run succeeds and does not warn about missing MSAs.
         assert result.exit_code == 0
@@ -878,7 +954,7 @@ class TestFinetunePipeline:
     def test_runs_all_stages_without_msa_dir(
         self, cif_protein_monomer, cif_protein_only, ccd_path, tmp_path
     ):
-        """Without --msa-dir, generate-msas and generate-train-config are skipped but
+        """Without --organized-msa-dir, generate-msas and generate-train-config are skipped but
         every other stage writes its artifact (CIFs, manifest, cache, NPZs)."""
         # No train.yml: OF3's training schema requires a real alignments directory.
         cif_dir = tmp_path / "input"
@@ -896,7 +972,7 @@ class TestFinetunePipeline:
         assert result.exit_code == 0, result.output
 
         # The two MSA-dependent stages report being skipped.
-        assert "skipped (no --msa-dir given)" in result.output
+        assert "skipped (no --organized-msa-dir given)" in result.output
         assert "generate-train-config -- skipped" in result.output
 
         # Every other stage wrote its artifact.
@@ -1106,24 +1182,11 @@ class TestGenerateTrainConfig:
 
         result = CliRunner().invoke(
             materialize_dataset_cache,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
             catch_exceptions=False,
         )
         assert result.exit_code == 0, result.output
         return msa_dir
-
-    def test_msa_dir_is_required(self, cif_protein_monomer, ccd_path, tmp_path):
-        """--msa-dir is mandatory: OF3's TrainingDatasetPaths needs exactly one
-        alignment path, so there is no valid config without one."""
-        output_dir = self._make_pipeline_output(cif_protein_monomer, ccd_path, tmp_path)
-
-        result = CliRunner().invoke(
-            generate_train_config, ["--output-dir", str(output_dir)]
-        )
-
-        # The command fails and names the missing --msa-dir option.
-        assert result.exit_code != 0
-        assert "msa-dir" in result.output.lower()
 
     def test_writes_schema_valid_config(self, cif_protein_monomer, ccd_path, tmp_path):
         """The generated config validates against OF3's TrainingExperimentConfig schema."""
@@ -1132,7 +1195,7 @@ class TestGenerateTrainConfig:
 
         result = CliRunner().invoke(
             generate_train_config,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
             catch_exceptions=False,
         )
 
@@ -1160,7 +1223,7 @@ class TestGenerateTrainConfig:
 
         result = CliRunner().invoke(
             generate_train_config,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
             catch_exceptions=False,
         )
 
@@ -1196,7 +1259,7 @@ class TestGenerateTrainConfig:
 
         result = CliRunner().invoke(
             generate_train_config,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
             catch_exceptions=False,
         )
 
@@ -1213,7 +1276,7 @@ class TestGenerateTrainConfig:
 
         result = CliRunner().invoke(
             generate_train_config,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
             catch_exceptions=False,
         )
 
@@ -1226,7 +1289,7 @@ class TestGenerateTrainConfig:
         msa_dir = self._make_msa_dir(cif_protein_monomer, output_dir, tmp_path)
         result = CliRunner().invoke(
             generate_train_config,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
             catch_exceptions=False,
         )
         assert result.exit_code == 0, result.output
@@ -1244,7 +1307,7 @@ class TestGenerateTrainConfig:
         result = CliRunner().invoke(
             generate_train_config,
             [
-                "--output-dir", str(output_dir), "--msa-dir", str(msa_dir),
+                "--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir),
                 "--wandb-project", "atomworks-ft", "--wandb-entity", "jennifer-wei",
             ],
             catch_exceptions=False,
@@ -1271,7 +1334,7 @@ class TestGenerateTrainConfig:
         result = CliRunner().invoke(
             generate_train_config,
             [
-                "--output-dir", str(output_dir), "--msa-dir", str(msa_dir),
+                "--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir),
                 "--wandb-project", "atomworks-ft", "--wandb-name", "demo-run",
             ],
             catch_exceptions=False,
@@ -1456,3 +1519,252 @@ class TestFinetunePrepSkipsEmptied:
         # The manifest lists no structures.
         manifest = json.loads((tmp_path / "out" / "manifest.json").read_text())
         assert manifest["structures"] == []
+
+
+# ── TestOrganizedMsaDirOption (--organized-msa-dir and its default) ──────────
+
+
+def _train_alignments_dir(output_dir: Path) -> str:
+    """Return the train dataset's alignments_directory from <output_dir>/train.yml."""
+    config = yaml.safe_load((output_dir / "train.yml").read_text())
+    return config["dataset_paths"]["weighted-pdb"]["alignments_directory"]
+
+
+class TestOrganizedMsaDirOption:
+    @pytest.fixture
+    def pipeline_output(self, cif_protein_monomer, ccd_path, tmp_path) -> Path:
+        """A full 3u8v pipeline output directory, built without MSAs."""
+        return TestGenerateTrainConfig()._make_pipeline_output(cif_protein_monomer, ccd_path, tmp_path)
+
+    @staticmethod
+    def _organize(cif_protein_monomer, output_dir: Path, msa_dir: Path) -> None:
+        """Put a ColabFold-style MSA under msa_dir and reorganize it into of3_alignments/."""
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        _make_unpaired_msa_gz(seq, msa_dir)
+        result = CliRunner().invoke(
+            materialize_dataset_cache,
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
+            catch_exceptions=False,
+        )
+        assert result.exit_code == 0, result.output
+
+    def test_new_flag_accepted(self, cif_protein_monomer, pipeline_output, tmp_path):
+        """generate-train-config --organized-msa-dir X points train.yml at X/of3_alignments."""
+        msa_dir = tmp_path / "msas"
+        self._organize(cif_protein_monomer, pipeline_output, msa_dir)
+
+        result = CliRunner().invoke(
+            generate_train_config,
+            ["--output-dir", str(pipeline_output), "--organized-msa-dir", str(msa_dir)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert _train_alignments_dir(pipeline_output) == str(msa_dir / "of3_alignments")
+
+    def test_old_flag_warns_and_works(self, cif_protein_monomer, pipeline_output, tmp_path):
+        """The old --msa-dir still works, with a deprecation warning on stderr."""
+        msa_dir = tmp_path / "msas"
+        self._organize(cif_protein_monomer, pipeline_output, msa_dir)
+
+        result = CliRunner().invoke(
+            generate_train_config,
+            ["--output-dir", str(pipeline_output), "--msa-dir", str(msa_dir)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "deprecated" in result.stderr
+        assert _train_alignments_dir(pipeline_output) == str(msa_dir / "of3_alignments")
+
+    def test_both_flags_error(self, cif_protein_monomer, pipeline_output, tmp_path):
+        """Passing both the new flag and the deprecated alias is a usage error."""
+        msa_dir = tmp_path / "msas"
+        self._organize(cif_protein_monomer, pipeline_output, msa_dir)
+
+        result = CliRunner().invoke(
+            generate_train_config,
+            ["--output-dir", str(pipeline_output), "--organized-msa-dir", str(msa_dir),
+             "--msa-dir", str(msa_dir)],
+        )
+
+        assert result.exit_code == 2
+        assert "--organized-msa-dir" in result.output
+
+    def test_generate_train_config_defaults_to_output_organized_msas(
+        self, cif_protein_monomer, pipeline_output
+    ):
+        """No flag: the MSA folder is <output-dir>/organized_msas."""
+        self._organize(cif_protein_monomer, pipeline_output, pipeline_output / "organized_msas")
+
+        result = CliRunner().invoke(
+            generate_train_config, ["--output-dir", str(pipeline_output)], catch_exceptions=False
+        )
+
+        assert result.exit_code == 0, result.output
+        assert _train_alignments_dir(pipeline_output) == str(
+            pipeline_output / "organized_msas" / "of3_alignments"
+        )
+
+    def test_generate_train_config_without_any_msa_folder_errors(self, pipeline_output):
+        """No flag and no <output-dir>/organized_msas: fail, naming the flag and the default."""
+        result = CliRunner().invoke(generate_train_config, ["--output-dir", str(pipeline_output)])
+
+        assert result.exit_code != 0
+        assert "--organized-msa-dir" in result.output
+        assert "organized_msas" in result.output
+        assert not (pipeline_output / "train.yml").exists()
+
+    def test_optional_commands_ignore_missing_default(self, pipeline_output):
+        """materialize-dataset-cache with no flag and no organized_msas/ skips the MSA step."""
+        result = CliRunner().invoke(
+            materialize_dataset_cache, ["--output-dir", str(pipeline_output)], catch_exceptions=False
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "Reorganized" not in result.output
+
+    def test_run_all_without_flags_never_calls_colabfold(
+        self, cif_protein_monomer, ccd_path, tmp_path, monkeypatch
+    ):
+        """run-all with no MSA flags skips the MSA stage and never contacts ColabFold."""
+        monkeypatch.setattr(
+            cli_mod, "make_msas_colabfold_server_batch",
+            lambda *a, **k: pytest.fail("ColabFold must not be called"),
+        )
+        cif_dir = tmp_path / "input"
+        cif_dir.mkdir()
+        (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
+
+        result = CliRunner().invoke(finetune_pipeline, [
+            "--cif-dir", str(cif_dir), "--output-dir", str(tmp_path / "out"),
+            "--ccd-path", str(ccd_path), "--skip-report",
+        ], catch_exceptions=False)
+
+        assert result.exit_code == 0, result.output
+        assert "Stage 2/10: generate-msas -- skipped" in result.output
+
+    def test_run_all_reuses_existing_default_folder(
+        self, cif_protein_monomer, ccd_path, tmp_path, monkeypatch
+    ):
+        """A rerun over an output dir that already has organized_msas/ reuses it without ColabFold."""
+        monkeypatch.setattr(
+            cli_mod, "make_msas_colabfold_server_batch",
+            lambda *a, **k: pytest.fail("ColabFold must not be called"),
+        )
+        cif_dir = tmp_path / "input"
+        cif_dir.mkdir()
+        (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
+        output_dir = tmp_path / "out"
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        _make_unpaired_msa_gz(seq, output_dir / "organized_msas")
+
+        result = CliRunner().invoke(finetune_pipeline, [
+            "--cif-dir", str(cif_dir), "--output-dir", str(output_dir),
+            "--ccd-path", str(ccd_path), "--skip-report",
+        ], catch_exceptions=False)
+
+        assert result.exit_code == 0, result.output
+        assert "Stage 2/10: generate-msas -- skipped" in result.output
+        assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq)
+                / "colabfold_main.a3m").exists()
+        assert _train_alignments_dir(output_dir) == str(output_dir / "organized_msas" / "of3_alignments")
+
+
+
+# ── TestFinetunePipelineMsaSources (run-all with user MSAs) ──────────────────
+
+
+class TestFinetunePipelineMsaSources:
+    @pytest.fixture
+    def no_colabfold(self, monkeypatch):
+        monkeypatch.setattr(
+            cli_mod, "make_msas_colabfold_server_batch",
+            lambda *a, **k: pytest.fail("ColabFold must not be called"),
+        )
+
+    @staticmethod
+    def _inputs(cif_protein_monomer, tmp_path) -> tuple[Path, Path, str]:
+        """(cif_dir, manifest, sequence): 3u8v plus a user MSA for its chain under source my_lab_db."""
+        cif_dir = tmp_path / "input"
+        cif_dir.mkdir()
+        (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
+        seq = chain_canonical_sequences(cif_protein_monomer)["A"]
+        user = tmp_path / "user_msas"
+        user.mkdir()
+        (user / "chain_a.a3m").write_text(f">query\n{seq}\n>hit\nW{seq[1:]}\n")
+        manifest = tmp_path / "msa_sources.yml"
+        manifest.write_text("my_lab_db: user_msas\n")
+        return cif_dir, manifest, seq
+
+    @staticmethod
+    def _run(cif_dir, output_dir, ccd_path, *extra):
+        return CliRunner().invoke(finetune_pipeline, [
+            "--cif-dir", str(cif_dir), "--output-dir", str(output_dir), "--ccd-path", str(ccd_path),
+            "--skip-report", "--skip-dataset-load", *extra,
+        ], catch_exceptions=False)
+
+    def test_msa_sources_runs_import_not_colabfold(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        cif_dir, manifest, seq = self._inputs(cif_protein_monomer, tmp_path)
+        output_dir, msa_dir = tmp_path / "out", tmp_path / "msas"
+
+        result = self._run(cif_dir, output_dir, ccd_path, "--organized-msa-dir", str(msa_dir), "--msa-sources", str(manifest))
+
+        assert result.exit_code == 0, result.output
+        assert "Stage 2/10: import-msas" in result.output
+        assert "templates with --msa-sources are not supported yet" in result.output
+        assert (msa_dir / "of3_alignments" / alignment_rep_id(seq) / "my_lab_db.a3m").exists()
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        assert "my_lab_db" in config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"]["max_seq_counts"]
+
+    def test_msa_sources_uses_default_folder(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        cif_dir, manifest, seq = self._inputs(cif_protein_monomer, tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = self._run(cif_dir, output_dir, ccd_path, "--msa-sources", str(manifest))
+
+        assert result.exit_code == 0, result.output
+        assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq) / "my_lab_db.a3m").exists()
+        assert (output_dir / "train.yml").exists()
+
+    @pytest.mark.parametrize("flag", [
+        ["--templates"], ["--server", "https://example.org"], ["--user-agent", "me"], ["--skip-existing"],
+    ])
+    def test_msa_sources_rejects_colabfold_only_flags(self, cif_protein_monomer, ccd_path, tmp_path, flag):
+        """Flags that only affect ColabFold or templates would silently do nothing: refused before stage 1."""
+        cif_dir, manifest, _ = self._inputs(cif_protein_monomer, tmp_path)
+        output_dir = tmp_path / "out"
+
+        result = CliRunner().invoke(finetune_pipeline, [
+            "--cif-dir", str(cif_dir), "--output-dir", str(output_dir), "--ccd-path", str(ccd_path),
+            "--msa-sources", str(manifest), *flag,
+        ])
+
+        assert result.exit_code == 2
+        assert flag[0] in result.output
+        assert not (output_dir / "manifest.json").exists()
+
+    def test_msa_sources_accepts_explicit_no_templates(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        cif_dir, manifest, _ = self._inputs(cif_protein_monomer, tmp_path)
+
+        result = self._run(cif_dir, tmp_path / "out", ccd_path, "--msa-sources", str(manifest), "--no-templates")
+
+        assert result.exit_code == 0, result.output
+
+    def test_msa_sources_folder_recycles_colabfold_msas(self, cif_protein_monomer, ccd_path, tmp_path, no_colabfold):
+        """--msa-sources <earlier MSA folder> reuses its ColabFold MSAs in a new output directory."""
+        cif_dir, _, seq = self._inputs(cif_protein_monomer, tmp_path)
+        old_msas = tmp_path / "earlier_run" / "organized_msas"
+        _make_unpaired_msa_gz(seq, old_msas)  # no msa_index.yml: a folder from before the index existed
+        output_dir = tmp_path / "new_out"
+
+        result = self._run(cif_dir, output_dir, ccd_path, "--msa-sources", str(old_msas))
+
+        assert result.exit_code == 0, result.output
+        assert "Stage 2/10: import-msas" in result.output
+        assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq) / "colabfold_main.a3m").read_text() == (
+            f">query\n{seq}\n"
+        )
+        assert not (output_dir / "organized_msas" / "msa_sources").exists()  # linked, not copied
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        assert config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"] == {"moltypes": ["PROTEIN"]}

@@ -169,7 +169,7 @@ class TestGenerateMsasTemplatesFlag:
         output_dir, msa_dir, _, _ = ubq
         result = CliRunner().invoke(
             generate_msas,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
             catch_exceptions=False,
         )
         assert result.exit_code == 0, result.output
@@ -182,7 +182,7 @@ class TestGenerateMsasTemplatesFlag:
         output_dir, msa_dir, _, _ = ubq
         result = CliRunner().invoke(
             generate_msas,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir), "--no-templates"],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir), "--no-templates"],
             catch_exceptions=False,
         )
         assert result.exit_code == 0, result.output
@@ -227,7 +227,7 @@ class TestGenerateMsasExistingPaired:
         monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
 
         result = CliRunner().invoke(
-            generate_msas, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)]
+            generate_msas, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
         )
 
         # Usage error, and ColabFold was never queried.
@@ -248,7 +248,7 @@ class TestGenerateMsasExistingPaired:
 
         result = CliRunner().invoke(
             generate_msas,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir), "--skip-existing"],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir), "--skip-existing"],
         )
 
         # Usage error, and ColabFold was never queried.
@@ -276,7 +276,7 @@ class TestGenerateMsasExistingPaired:
 
         result = CliRunner().invoke(
             generate_msas,
-            ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir), "--skip-existing"],
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir), "--skip-existing"],
             catch_exceptions=False,
         )
 
@@ -596,7 +596,7 @@ class TestFetchTemplates:
         _flaky_rcsb(monkeypatch, failing_id="2k25", failures=1000)
 
         result = CliRunner().invoke(
-            fetch_templates_cli, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)]
+            fetch_templates_cli, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
         )
 
         assert result.exit_code == 1
@@ -615,7 +615,7 @@ class TestFetchTemplates:
             fetch_templates_cli,
             [
                 "--output-dir", str(output_dir),
-                "--msa-dir", str(msa_dir),
+                "--organized-msa-dir", str(msa_dir),
                 "--pdb-mirror-path", str(mirror),
             ],
             catch_exceptions=False,

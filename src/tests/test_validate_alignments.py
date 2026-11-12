@@ -4,10 +4,12 @@ import json
 
 import numpy as np
 import pytest
+import yaml
 
 from aw_of3_finetune.prepare_inputs import PREPARE_RECORD_FILE
 from aw_of3_finetune.constants import TEMPLATE_CUTOFF_FILENAME
 from aw_of3_finetune.validate import CHECKS, run_validation
+from aw_of3_finetune.training_config import msa_settings_for_sources
 from aw_of3_finetune.validate.findings import Severity
 from validate_helpers import context, mutable_copy
 
@@ -53,7 +55,7 @@ def test_alignment_checks_pass_on_clean_build(built_dataset):
     assert info_checks == ["V15"]
 
 
-def test_v13_detects_wrong_query_row(built_dataset, tmp_path):
+def test_msa_query_row_differing_from_chain_is_an_error(built_dataset, tmp_path):
     """V13 errors when an MSA's first row is not the chain's own sequence."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     rep_id = None
@@ -73,18 +75,100 @@ def test_v13_detects_wrong_query_row(built_dataset, tmp_path):
     report = run_validation(context(built), ["V13"])
 
     # Every V13 finding on 2crb is an error, and the first one explains the cause.
-    v13_findings = _hits(report, "V13", "2crb")
-    assert len(v13_findings) > 0
-    assert {f.severity for f in v13_findings} == {Severity.ERROR}
-    assert "first MSA row differs" in v13_findings[0].message
+    query_row_findings = _hits(report, "V13", "2crb")
+    assert len(query_row_findings) > 0
+    assert {f.severity for f in query_row_findings} == {Severity.ERROR}
+    assert "first MSA row differs" in query_row_findings[0].message
 
 
-def test_v13_ignores_lowercase_insertions(built_dataset, tmp_path):
+def test_lowercase_msa_insertions_do_not_change_the_query_row(built_dataset, tmp_path):
     """Lowercase letters in an a3m are insertions, so they do not change the query row."""
     built = mutable_copy(built_dataset, tmp_path / "copy")
     for a3m in (built.msa_dir / "of3_alignments").glob("*/colabfold_main.a3m"):
         header, sequence = a3m.read_text().splitlines()[:2]
         a3m.write_text(f"{header}\n{sequence[:3]}ccc{sequence[3:]}\n")
+
+    report = run_validation(context(built), ["V13"])
+
+    assert report.errors == []
+
+
+def _protein_rep_id(built, entry: str) -> str:
+    """rep_id of the first protein chain of entry."""
+    rep_id = None
+
+    def find(structure_data):
+        nonlocal rep_id
+        rep_id = _first_protein_chain(structure_data, entry)["alignment_representative_id"]
+
+    _edit_cache(built, find)
+    return rep_id
+
+
+def _write_train_msa_section(built, msa_section: dict) -> None:
+    """Write a train.yml holding only the train dataset's msa section."""
+    config = {"dataset_configs": {"train": {"weighted-pdb": {"config": {"msa": msa_section}}}}}
+    (built.output_dir / "train.yml").write_text(yaml.safe_dump(config))
+
+
+def test_query_row_check_covers_every_msa_source(built_dataset, tmp_path):
+    """Each source's file is checked: a second source with a wrong query row gives one error naming it."""
+    built = mutable_copy(built_dataset, tmp_path / "copy")
+    rep_dir = built.msa_dir / "of3_alignments" / _protein_rep_id(built, "2crb")
+    header, sequence, *_ = (rep_dir / "colabfold_main.a3m").read_text().splitlines()
+    swapped = ("A" if sequence[0] != "A" else "G") + sequence[1:]
+    (rep_dir / "my_lab_db.a3m").write_text(f"{header}\n{swapped}\n")
+
+    report = run_validation(context(built), ["V13"])
+
+    row_errors = [f for f in _hits(report, "V13", "2crb") if "first MSA row differs" in f.message]
+    assert len(row_errors) == 1
+    assert "my_lab_db" in row_errors[0].message
+    assert row_errors[0].detail["source"] == "my_lab_db"
+
+
+def test_msa_from_any_source_counts_as_present(built_dataset, tmp_path):
+    """A chain with only a user source's MSA is not reported missing."""
+    built = mutable_copy(built_dataset, tmp_path / "copy")
+    for a3m in (built.msa_dir / "of3_alignments").glob("*/colabfold_main.a3m"):
+        a3m.rename(a3m.with_name("my_lab_db.a3m"))
+
+    report = run_validation(context(built), ["V13"])
+
+    assert report.errors == []
+
+
+def test_flags_msa_source_not_read_by_train_yml(built_dataset, tmp_path):
+    """A source train.yml never reads (today's default section, new name) is an error: the MSA would be ignored."""
+    built = mutable_copy(built_dataset, tmp_path / "copy")
+    rep_dir = built.msa_dir / "of3_alignments" / _protein_rep_id(built, "2crb")
+    (rep_dir / "my_lab_db.a3m").write_text((rep_dir / "colabfold_main.a3m").read_text())
+    _write_train_msa_section(built, {"moltypes": ["PROTEIN"]})
+
+    report = run_validation(context(built), ["V13"])
+
+    unread = [f for f in report.errors if "never read by train.yml" in f.message]
+    assert len(unread) == 1
+    assert "my_lab_db.a3m" in unread[0].message
+
+
+def test_accepts_msa_source_listed_in_train_yml(built_dataset, tmp_path):
+    built = mutable_copy(built_dataset, tmp_path / "copy")
+    rep_dir = built.msa_dir / "of3_alignments" / _protein_rep_id(built, "2crb")
+    (rep_dir / "my_lab_db.a3m").write_text((rep_dir / "colabfold_main.a3m").read_text())
+    _write_train_msa_section(built, msa_settings_for_sources({"colabfold_main", "my_lab_db"}))
+
+    report = run_validation(context(built), ["V13"])
+
+    assert report.errors == []
+
+
+def test_paired_on_source_counts_as_read(built_dataset, tmp_path):
+    """uniprot_hits is read for pairing (msas_to_pair), not stacked, so it is not flagged."""
+    built = mutable_copy(built_dataset, tmp_path / "copy")
+    rep_dir = built.msa_dir / "of3_alignments" / _protein_rep_id(built, "2crb")
+    (rep_dir / "uniprot_hits.a3m").write_text((rep_dir / "colabfold_main.a3m").read_text())
+    _write_train_msa_section(built, {"moltypes": ["PROTEIN"]})
 
     report = run_validation(context(built), ["V13"])
 

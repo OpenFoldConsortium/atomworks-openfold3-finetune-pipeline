@@ -54,7 +54,7 @@ Run the pipeline. `--skip-existing` reuses the MSAs you just unpacked.
 pixi run finetune-pipeline \
   --cif-dir examples/tutorial \
   --output-dir output/tutorial \
-  --msa-dir output/msas \
+  --organized-msa-dir output/msas \
   --ccd-path $CCD_PATH \
   --name tutorial \
   --skip-existing
@@ -123,6 +123,6 @@ Point `--cif-dir` at your own mmCIFs and run the same command without `--skip-ex
 
 ## Use live MSAs instead
 
-If you skip step 3, the pipeline fetches MSAs from the public ColabFold server. Run step 4 with an empty `--msa-dir`, and without `--skip-existing`.
+If you skip step 3, the pipeline fetches MSAs from the public ColabFold server. Run step 4 with an empty `--organized-msa-dir`, and without `--skip-existing`.
 
 This took about 7 minutes in our tests. It depends on the server's queue and can take much longer.

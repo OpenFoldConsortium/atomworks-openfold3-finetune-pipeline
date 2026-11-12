@@ -28,7 +28,7 @@ def check_v21_dataset_loads(ctx: ValidationContext) -> list[Finding]:
         One E per entry whose first row fails (crops are off, so one row covers the entry); one INFO when there is no msa_dir.
     """
     if ctx.msa_dir is None:
-        return [Finding("V21", Severity.INFO, None, "skipped: no --msa-dir (OF3 requires an alignments directory)")]
+        return [Finding("V21", Severity.INFO, None, "skipped: no --organized-msa-dir (OF3 requires an alignments directory)")]
     paths = build_dataset_paths(ctx.output_dir, ctx.msa_dir)["weighted-pdb"]
     paths["dataset_cache_file"] = str(ctx.cache_path)
     paths["target_structures_directory"] = str(ctx.npz_dir)

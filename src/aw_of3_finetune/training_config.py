@@ -16,13 +16,54 @@ from typing import Any
 import click
 import yaml
 
-from aw_of3_finetune.constants import COMPRESSED_STRUCTURES_DIRNAME
+from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
+
+from aw_of3_finetune.constants import COMPRESSED_STRUCTURES_DIRNAME, OF3_ALIGNMENTS_DIRNAME
 from aw_of3_finetune.split import SplitPaths, dataset_cache_sha256, split_paths
 from aw_of3_finetune.templates import TEMPLATE_DATA_DIRNAME
 
 # ColabFold searches proteins only, so RNA chains have no MSA; OF3 (default: protein and RNA)
 # would fail on them. RNA is featurized without an MSA, like DNA. RNA is not properly supported.
 MSA_SETTINGS: dict[str, Any] = {"moltypes": ["PROTEIN"]}
+
+
+def discover_msa_sources(of3_msa_dir: Path) -> set[str]:
+    """The MSA source names present in an OF3 alignments directory.
+
+    Args:
+        of3_msa_dir: ``<organized-msa-dir>/of3_alignments`` (``<rep_id>/<source>.a3m``).
+
+    Returns:
+        The ``<source>`` stems; empty if the directory is missing.
+    """
+    return {p.stem for p in of3_msa_dir.glob("*/*.a3m")}
+
+
+def msa_settings_for_sources(sources: set[str]) -> dict[str, Any]:
+    """The train.yml msa section that makes OpenFold3 read every given source.
+
+    OpenFold3 reads an alignment file only if its stem is a key of max_seq_counts, and
+    stacks only stems in aln_order (paired-on sources, msas_to_pair, are used for
+    pairing instead). If every name is one OpenFold3 already reads, the section stays
+    MSA_SETTINGS so OpenFold3's defaults apply. Otherwise it spells out OpenFold3's
+    defaults (read from MSASettings, never copied) plus each new name at max_rows,
+    appended alphabetically to aln_order unless it is a paired-on name.
+
+    Args:
+        sources: Source names (alignment file stems).
+
+    Returns:
+        The msa section.
+    """
+    defaults = MSASettings()
+    new = sources - defaults.max_seq_counts.keys()
+    if not new:
+        return dict(MSA_SETTINGS)
+    return {
+        **MSA_SETTINGS,
+        "max_seq_counts": {**defaults.max_seq_counts, **{name: defaults.max_rows for name in sorted(new)}},
+        "aln_order": [*defaults.aln_order, *sorted(new - set(defaults.msas_to_pair))],
+    }
 
 _TEMPLATE_CONFIG: dict[str, Any] = {
     "experiment_settings": {
@@ -170,7 +211,7 @@ def build_dataset_paths(output_dir: Path, msa_dir: Path) -> dict[str, Any]:
 
     Args:
         output_dir: Pipeline output directory (dataset_cache.json, of3_compressed_structures/, ...).
-        msa_dir: The --msa-dir; template paths are added if preprocess-templates has run.
+        msa_dir: The --organized-msa-dir; template paths are added if preprocess-templates has run.
 
     Returns:
         ``{"weighted-pdb": {...}}``, never looking at ``split/``.
@@ -216,7 +257,7 @@ def build_train_config(
     Args:
         output_dir: finetune-prep/materialize-dataset-cache output directory
             (dataset_cache.json, of3_compressed_structures/, reference_mols/).
-        msa_dir: The --msa-dir passed to generate-msas/materialize-dataset-cache;
+        msa_dir: The --organized-msa-dir passed to generate-msas/materialize-dataset-cache;
             alignments_directory is set to ``{msa_dir}/of3_alignments``. Required
             (see module docstring).
         training_output_dir: Where Lightning writes checkpoints/logs. Defaults to
@@ -246,6 +287,15 @@ def build_train_config(
         config["logging_config"]["wandb_config"] = wandb_config
 
     config["dataset_paths"] = build_dataset_paths(output_dir, msa_dir)
+    sources = discover_msa_sources(msa_dir / OF3_ALIGNMENTS_DIRNAME)
+    if not sources:
+        click.echo(
+            f"Warning: no MSAs under {msa_dir / OF3_ALIGNMENTS_DIRNAME}; training will run without them. "
+            "Run materialize-dataset-cache (ColabFold MSAs) or import-msas first.",
+            err=True,
+        )
+    msa_settings = msa_settings_for_sources(sources)
+    config["dataset_configs"]["train"]["weighted-pdb"]["config"]["msa"] = msa_settings
     split = _current_split_paths(output_dir)
     if split is not None:
         val_paths = copy.deepcopy(config["dataset_paths"]["weighted-pdb"])
@@ -254,6 +304,9 @@ def build_train_config(
         config["dataset_paths"]["val-weighted-pdb"] = val_paths
         config["dataset_configs"]["validation"] = {
             "val-weighted-pdb": copy.deepcopy(_VALIDATION_CONFIG)
+        }
+        config["dataset_configs"]["validation"]["val-weighted-pdb"]["config"]["msa"] = {
+            "subsample_main": False, **msa_settings,
         }
     return config
 
@@ -291,7 +344,7 @@ def write_train_config(
 
     Args:
         output_dir: finetune-prep/materialize-dataset-cache output directory.
-        msa_dir: The --msa-dir passed to generate-msas/materialize-dataset-cache.
+        msa_dir: The --organized-msa-dir passed to generate-msas/materialize-dataset-cache.
         config_path: Where to write; defaults to ``{output_dir}/train.yml``.
         **build_kwargs: Passed to build_train_config (wandb_* etc.).
 

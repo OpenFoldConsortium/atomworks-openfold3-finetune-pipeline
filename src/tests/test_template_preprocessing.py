@@ -97,14 +97,14 @@ def _run_template_stages(
         fetch_templates,
         [
             "--output-dir", str(output_dir),
-            "--msa-dir", str(msa_dir),
+            "--organized-msa-dir", str(msa_dir),
             "--pdb-mirror-path", str(FIXTURE_DIR / "pdb_mirror"),
         ],
     )
-    _run(materialize_dataset_cache, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)])
+    _run(materialize_dataset_cache, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)])
     _run(
         preprocess_templates,
-        ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)] + (preprocess_args or []),
+        ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)] + (preprocess_args or []),
     )
 
 
@@ -152,7 +152,7 @@ def test_changed_sequence_filter_rebuilds_template_cache(tmp_path):
     output_dir, msa_dir = _prepare_1fdl(tmp_path)
     _run_template_stages(output_dir, msa_dir, ["--no-sequence-filter"])
 
-    _run(preprocess_templates, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)])
+    _run(preprocess_templates, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)])
 
     expected_chain_c_templates = []
     actual_chain_c_templates = _template_ids_by_chain(output_dir)["C"]
@@ -166,14 +166,14 @@ def test_preprocess_templates_reports_date_filtered_chains(tmp_path):
         fetch_templates,
         [
             "--output-dir", str(output_dir),
-            "--msa-dir", str(msa_dir),
+            "--organized-msa-dir", str(msa_dir),
             "--pdb-mirror-path", str(FIXTURE_DIR / "pdb_mirror"),
         ],
     )
-    _run(materialize_dataset_cache, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)])
+    _run(materialize_dataset_cache, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)])
     result = CliRunner().invoke(
         preprocess_templates,
-        ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)],
+        ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
         catch_exceptions=False,
     )
     assert result.exit_code == 0, result.output
@@ -212,7 +212,7 @@ def test_weighted_pdb_dataset_loads_templates(ccd_path, tmp_path):
     output_dir, msa_dir = _prepare_1fdl(tmp_path, ccd_path)
     _run_template_stages(output_dir, msa_dir)
     save_structures_as_npz(output_dir / "cleaned_structures", output_dir / "of3_compressed_structures")
-    _run(generate_train_config, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)])
+    _run(generate_train_config, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)])
 
     paths = yaml.safe_load((output_dir / "train.yml").read_text())["dataset_paths"]
     with warnings.catch_warnings():
@@ -274,7 +274,7 @@ def test_cutoff_date_is_recorded_and_cleared(tmp_path):
     expected_record = {"template_cutoff_date": "2100-01-01"}
     assert actual_record == expected_record
 
-    _run(preprocess_templates, ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)])
+    _run(preprocess_templates, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)])
     assert not record.exists()
 
 
@@ -283,7 +283,7 @@ def test_cutoff_date_is_recorded_and_cleared(tmp_path):
 )
 def test_cutoff_date_conflicting_options_are_usage_errors(tmp_path, extra_args):
     output_dir, msa_dir = _prepare_1fdl(tmp_path)
-    args = ["--output-dir", str(output_dir), "--msa-dir", str(msa_dir)]
+    args = ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
 
     result = CliRunner().invoke(
         preprocess_templates, args + ["--template-cutoff-date", "2100-01-01"] + extra_args

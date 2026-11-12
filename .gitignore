@@ -21,3 +21,6 @@ wandb/
 
 # docs build output
 docs/_build/
+
+# local design docs and plans (not published)
+docs/superpowers/

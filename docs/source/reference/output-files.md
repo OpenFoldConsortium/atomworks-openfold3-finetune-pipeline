@@ -13,20 +13,24 @@
 | `cleanup_settings.json` | The cleanup settings used |
 | `cleanup_steps/<id>.json` | What each cleanup step did to a structure |
 | `validation.json` | Findings of the V checks |
-| `train.yml` | OpenFold3 training config. Written only with `--msa-dir` |
+| `train.yml` | OpenFold3 training config. Written only when there is an MSA folder |
 | `report/index.html` | The validation report |
 | `split/` | Train and validation caches, with `--split-csv` |
 | `training_output/` | Checkpoints, once you train |
 
-## `<msa-dir>`
+## `<organized-msa-dir>`
+
+The MSA folder. Default: `<output-dir>/organized_msas`.
 
 | Path | What it is |
 |---|---|
-| `unpaired/` | MSAs per sequence from ColabFold |
+| `msa_index.yml` | The MSA sources in this folder, and where each is stored. An absolute path is a source linked from an earlier run's MSA folder |
+| `unpaired/` | MSAs per sequence from ColabFold (source `colabfold_main`) |
+| `msa_sources/<source>/` | Your own MSAs, from `import-msas` |
 | `paired/` | Paired MSAs per complex from ColabFold |
 | `templates/` | Raw template hits from ColabFold |
 | `template_structures/` | Downloaded template structures |
-| `of3_alignments/` | MSAs laid out for OpenFold3 |
+| `of3_alignments/` | MSAs laid out for OpenFold3, one `<rep_id>/<source>.a3m` per source |
 | `of3_template_alignments/` | Template hits laid out for OpenFold3 |
 | `of3_template_data/` | The template cache and filter records |
 

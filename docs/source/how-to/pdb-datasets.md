@@ -68,7 +68,7 @@ Pass the output directory as `--cif-dir`. The report reads the records `prepare-
 pixi run finetune-pipeline \
   --cif-dir <cif-dir> \
   --output-dir <output-dir> \
-  --msa-dir <msa-dir> \
+  --organized-msa-dir <organized-msa-dir> \
   --ccd-path $CCD_PATH \
   --name <dataset-name>
 ```

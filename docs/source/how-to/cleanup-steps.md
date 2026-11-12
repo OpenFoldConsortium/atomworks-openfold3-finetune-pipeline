@@ -23,7 +23,7 @@ pixi run finetune-pipeline \
   --cif-dir <dir-of-mmcifs> \
   --output-dir <output-dir> \
   --ccd-path $CCD_PATH \
-  --msa-dir <msa-dir> \
+  --organized-msa-dir <organized-msa-dir> \
   --cleanup-config cleanup.yml
 ```
 

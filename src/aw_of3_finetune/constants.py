@@ -27,3 +27,15 @@ CLEANED_STRUCTURES_DIRNAME = "cleaned_structures"
 
 # finetune-pipeline writes the cleaned structures as OF3 NPZ files (<id>/<id>.npz) here; train.yml, split-dataset and the report read them from here.
 COMPRESSED_STRUCTURES_DIRNAME = "of3_compressed_structures"
+
+# Default MSA folder (--organized-msa-dir) under the output directory: ColabFold output or imported user MSAs, plus of3_alignments/.
+ORGANIZED_MSAS_DIRNAME = "organized_msas"
+
+# User-provided MSAs (import-msas): per-source atomworks stores live in <organized-msa-dir>/msa_sources/<source>/.
+MSA_SOURCES_DIRNAME = "msa_sources"
+# Source index in every organized MSA folder: {source name: store folder relative to the MSA folder}.
+MSA_INDEX_NAME = "msa_index.yml"
+# The plain-text <rep_id>/<source>.a3m layout OpenFold3 reads (alignments_directory).
+OF3_ALIGNMENTS_DIRNAME = "of3_alignments"
+# Where atomworks' ColabFold client writes unpaired MSAs: the store of source colabfold_main.
+COLABFOLD_UNPAIRED_DIRNAME = "unpaired"

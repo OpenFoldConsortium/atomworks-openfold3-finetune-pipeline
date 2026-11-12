@@ -208,7 +208,7 @@ def test_finetune_pipeline_orchestrator_e2e(
             "--cif-dir", str(cif_dir),
             "--output-dir", str(output_dir),
             "--ccd-path", str(ccd_path),
-            "--msa-dir", str(msa_dir),
+            "--organized-msa-dir", str(msa_dir),
             "--name", "pipeline-smoke",
         ],
         catch_exceptions=False,

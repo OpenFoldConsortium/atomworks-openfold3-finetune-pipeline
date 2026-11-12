@@ -19,6 +19,19 @@ Pass these to `--cleanup-config` as YAML or JSON. List only what you want to cha
 
 Three steps cannot be switched off: adding unresolved atoms, removing terminal `OXT` and `OP3` atoms, and removing hydrogens.
 
+## MSA sources manifest
+
+Pass this to `--msa-sources` as YAML or JSON. Each key is an MSA source name, which becomes the file name OpenFold3 reads. Each value is a folder, searched recursively, or a glob. Relative paths are read from the manifest's folder.
+
+```yaml
+uniref90_hits: searches/uniref90
+cfdb_uniref30: "pdb_msas/*/cfdb_uniref30.a3m"
+```
+
+Instead of a file, `--msa-sources` also takes an MSA folder from an earlier run, which is linked rather than copied. See [Reuse MSAs from an earlier run](../how-to/user-msas.md#reuse-msas-from-an-earlier-run).
+
+Names are letters, digits, `_` and `-`; `colabfold_paired`, `dummy` and `templates` are not allowed. See [Use your own MSAs](../how-to/user-msas.md).
+
 ## `train.yml`
 
 `generate-train-config` writes this OpenFold3 config. Its defaults prove a dataset trains, and are not training-scale settings.
@@ -29,6 +42,7 @@ Three steps cannot be switched off: adding unresolved atoms, removing terminal `
 | `max_epochs` | `1` | Epochs to run. Raise it for a real run |
 | `batch_size` | `1` | Structures per step |
 | `sample_weights` | See below | How crops are chosen within a structure |
+| `msa` | Protein MSAs, OpenFold3's sources | Which MSA files are read. A source name OpenFold3 does not know is added to `max_seq_counts` and `aln_order` |
 
 ### Sampling
 

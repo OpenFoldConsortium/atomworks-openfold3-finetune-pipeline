@@ -39,7 +39,7 @@ pixi run test
 pixi run finetune-pipeline \
   --cif-dir examples/quickstart \
   --output-dir output/quickstart \
-  --msa-dir output/quickstart_msas \
+  --organized-msa-dir output/quickstart_msas \
   --ccd-path $CCD_PATH \
   --name quickstart
 ```
