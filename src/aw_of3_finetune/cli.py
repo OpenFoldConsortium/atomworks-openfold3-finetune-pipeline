@@ -24,6 +24,7 @@ from pydantic import ValidationError
 from aw_of3_finetune.cleanup import CleanupSettings, EmptyStructureError
 from aw_of3_finetune.constants import (
     CLEANED_STRUCTURES_DIRNAME,
+    COLABFOLD_UNPAIRED_DIRNAME,
     COMPRESSED_STRUCTURES_DIRNAME,
     ORGANIZED_MSAS_DIRNAME,
     PREP_DROPPED_FILE,
@@ -36,7 +37,7 @@ from aw_of3_finetune.msa import (
     collect_complex_queries,
     collect_msa_queries,
 )
-from aw_of3_finetune.msa_sources import MsaSourcesError
+from aw_of3_finetune.msa_sources import MsaSourcesError, add_to_msa_index, import_user_msas, msa_dir_kind
 from aw_of3_finetune.prepare_inputs import (
     DEFAULT_RELEASE_DATE,
     PREPARE_DROPPED_FILE,
@@ -777,6 +778,15 @@ def generate_msas(
         )
 
     msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=False)
+    try:
+        kind = msa_dir_kind(msa_dir)
+    except MsaSourcesError as error:
+        raise click.ClickException(str(error)) from error
+    if kind == "user":
+        raise click.ClickException(
+            f"{msa_dir} holds user-provided MSAs (import-msas); one MSA folder holds ColabFold or "
+            "user MSAs, not both. Use a fresh --organized-msa-dir."
+        )
     msa_dir.mkdir(parents=True, exist_ok=True)
 
     seqs = list(queries.values())
@@ -805,6 +815,7 @@ def generate_msas(
     _check_paired_dirs_writable(complexes, msa_dir, skip_existing)
 
     if not seqs and not complexes:
+        add_to_msa_index(msa_dir, {"colabfold_main": COLABFOLD_UNPAIRED_DIRNAME})
         click.echo("All MSAs already exist (--skip-existing). Nothing to do.")
         return
 
@@ -820,9 +831,68 @@ def generate_msas(
         user_agent=user_agent,
         host_url=server,
     )
+    add_to_msa_index(msa_dir, {"colabfold_main": COLABFOLD_UNPAIRED_DIRNAME})
     click.echo(f"Done. Unpaired under {msa_dir / 'unpaired'}, paired under {msa_dir / 'paired'}.")
     if templates:
         click.echo(f"Template hits under {msa_dir / 'templates'}; fetch-templates resolves their structures.")
+
+
+@click.command()
+@click.option(
+    "--output-dir",
+    required=True,
+    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    help="Pipeline output directory produced by finetune-prep "
+    "(must contain manifest.json and cleaned_structures/).",
+)
+@organized_msa_dir_option(
+    exists=False,
+    help="Folder to import the MSAs into: <organized-msa-dir>/msa_sources/<source>/, the source "
+    "index msa_index.yml, and of3_alignments/ for OpenFold3. Must not hold ColabFold MSAs.",
+)
+@click.option(
+    "--msa-sources",
+    "manifest_path",
+    required=True,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="YAML/JSON file mapping each MSA source name (the OpenFold3 alignment file name, e.g. "
+    "uniref90_hits) to a directory or glob of A3M files. Files are matched to chains by their "
+    "first (query) sequence.",
+)
+@_with_pipeline_logs
+def import_msas(output_dir: Path, msa_dir: Path | None, manifest_path: Path) -> None:
+    """Import your own MSAs instead of querying the ColabFold server.
+
+    Every file is checked first (query sequence, duplicates, OpenFold3's own A3M and
+    pairing-header parsers); nothing is copied if any check fails. Then of3_alignments/
+    is brought up to date, so generate-train-config can run next.
+    """
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=False)
+    try:
+        summary = import_user_msas(output_dir, msa_dir, manifest_path)
+    except MsaSourcesError as error:
+        raise click.ClickException(str(error)) from error
+    for scan in summary.scans:
+        click.echo(
+            f"{scan.source}: imported {len(scan.files) + len(scan.unmatched)} file(s), "
+            f"covers {summary.covered[scan.source]} dataset sequence(s)"
+        )
+        if scan.unmatched:
+            listing = "\n    ".join(str(u.path) for u in scan.unmatched)
+            click.echo(
+                f"  WARNING: {scan.source}: {len(scan.unmatched)} file(s) match no sequence in this "
+                f"dataset (imported all the same):\n    {listing}",
+                err=True,
+            )
+        if scan.ignored:
+            listing = "\n    ".join(str(p) for p in scan.ignored)
+            click.echo(f"  {scan.source}: ignored {len(scan.ignored)} non-A3M file(s):\n    {listing}", err=True)
+    click.echo(_reorganize_message(summary.reorganize, msa_dir / "of3_alignments"))
+    if summary.reorganize.missing:
+        click.echo(
+            f"WARNING: {summary.reorganize.missing} sequence(s) have no MSA from any source",
+            err=True,
+        )
 
 
 def _drop_entries(output_dir: Path, cache_path: Path, failing: set[str]) -> None:

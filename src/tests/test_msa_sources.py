@@ -6,6 +6,8 @@ TestLoadManifest    sources manifest (YAML/JSON): directories, globs, source-nam
 TestScanSources     per-file checks before import: query match, duplicates, OF3 format.
 TestMsaIndex        msa_index.yml: source name -> store folder, legacy folders, no mixing.
 TestImportUserMsas  import_user_msas: stores, index, of3_alignments, reruns.
+TestImportMsasCli   the import-msas command.
+TestGenerateMsasIndex  generate-msas writes the source index and refuses user folders.
 """
 
 from __future__ import annotations
@@ -20,7 +22,8 @@ from atomworks.ml.preprocessing.msa.finding import find_msas
 from atomworks.ml.preprocessing.msa.organizing import MSAOrganizationConfig, organize_msas
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import finetune_prep
+import aw_of3_finetune.cli as cli_mod
+from aw_of3_finetune.cli import finetune_prep, generate_msas, import_msas
 
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.msa_sources import (
@@ -546,3 +549,115 @@ class TestImportUserMsas:
         assert summary.reorganize.missing == 1
         # Still imported: the store is keyed by sequence, so a later dataset with this chain finds it.
         assert (msa_dir / "msa_sources" / "src" / alignment_rep_id(SEQ_B)[:2] / f"{alignment_rep_id(SEQ_B)}.a3m.gz").exists()
+
+
+class TestImportMsasCli:
+    def test_cli_imports_and_reports(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "user" / "a.a3m", _a3m(seq))
+        _touch(tmp_path / "user" / "other.a3m", _a3m(SEQ_B))
+        manifest = _write_manifest(tmp_path / "m.yml", {"my_lab_db": "user"})
+
+        result = CliRunner().invoke(
+            import_msas, ["--output-dir", str(output_dir), "--msa-sources", str(manifest)], catch_exceptions=False
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "my_lab_db" in result.stdout and "covers 1" in result.stdout
+        assert "other.a3m" in result.stderr  # unmatched files are a warning
+        assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq) / "my_lab_db.a3m").exists()
+
+    def test_cli_reports_sequences_without_msa(self, cif_protein_monomer, tmp_path):
+        output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "user" / "other.a3m", _a3m(SEQ_B))
+        manifest = _write_manifest(tmp_path / "m.yml", {"my_lab_db": "user"})
+
+        result = CliRunner().invoke(
+            import_msas, ["--output-dir", str(output_dir), "--msa-sources", str(manifest)], catch_exceptions=False
+        )
+
+        assert result.exit_code == 0, result.output
+        assert "1 sequence(s) have no MSA from any source" in result.stderr
+
+    def test_cli_bad_file_exits_1_with_message(self, cif_protein_monomer, tmp_path):
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        _touch(tmp_path / "user" / "ragged.a3m", _a3m(seq, [("h", seq + "K")]))
+        manifest = _write_manifest(tmp_path / "m.yml", {"my_lab_db": "user"})
+
+        result = CliRunner().invoke(import_msas, ["--output-dir", str(output_dir), "--msa-sources", str(manifest)])
+
+        assert result.exit_code == 1
+        assert "ragged.a3m" in result.output
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+class TestGenerateMsasIndex:
+    @pytest.fixture
+    def no_colabfold(self, monkeypatch):
+        """ColabFold replaced by a no-op that records its calls."""
+        calls: list[dict] = []
+        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
+        return calls
+
+    def test_generate_msas_writes_index(self, cif_protein_monomer, tmp_path, no_colabfold):
+        output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
+        msa_dir = tmp_path / "msas"
+
+        result = CliRunner().invoke(
+            generate_msas, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert len(no_colabfold) == 1
+        assert yaml.safe_load((msa_dir / "msa_index.yml").read_text()) == {"colabfold_main": "unpaired"}
+
+    def test_generate_msas_skip_existing_writes_index_for_legacy_dir(self, cif_protein_monomer, tmp_path, no_colabfold):
+        """A legacy folder whose MSAs all exist: nothing to query, but the index is written."""
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        msa_dir = tmp_path / "msas"
+        rep_id = alignment_rep_id(seq)
+        store = msa_dir / "unpaired" / rep_id[:2] / f"{rep_id}.a3m.gz"
+        store.parent.mkdir(parents=True)
+        with gzip.open(store, "wt") as f:
+            f.write(_a3m(seq))
+
+        result = CliRunner().invoke(
+            generate_msas,
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir), "--skip-existing"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0, result.output
+        assert no_colabfold == []
+        assert yaml.safe_load((msa_dir / "msa_index.yml").read_text()) == {"colabfold_main": "unpaired"}
+
+    def test_generate_msas_failure_writes_no_index(self, cif_protein_monomer, tmp_path, monkeypatch):
+        output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
+        msa_dir = tmp_path / "msas"
+
+        def fail(*a, **kw):
+            raise RuntimeError("server down")
+
+        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", fail)
+        result = CliRunner().invoke(
+            generate_msas, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
+        )
+
+        assert result.exit_code != 0
+        assert not (msa_dir / "msa_index.yml").exists()
+
+    def test_generate_msas_refuses_user_dir(self, cif_protein_monomer, tmp_path, monkeypatch):
+        output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
+        msa_dir = tmp_path / "msas"
+        _write_index(msa_dir, {"x": "msa_sources/x"})
+        monkeypatch.setattr(
+            cli_mod, "make_msas_colabfold_server_batch", lambda *a, **k: pytest.fail("ColabFold must not be called")
+        )
+
+        result = CliRunner().invoke(
+            generate_msas, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
+        )
+
+        assert result.exit_code == 1
+        assert "fresh --organized-msa-dir" in result.output
