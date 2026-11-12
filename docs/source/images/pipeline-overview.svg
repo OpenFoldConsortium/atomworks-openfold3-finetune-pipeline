@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 822" width="720" height="822" role="img" aria-labelledby="title desc">
+<title id="title">Pipeline commands in run order</title>
+<desc id="desc">Four groups in a two by two grid. 1. Annotate: prepare-inputs (optional, run by hand), then finetune-prep. 2. Search: generate-msas or import-msas, then fetch-templates. 3. Hand off: materialize-dataset-cache, preprocess-templates, NPZ structure files, split-dataset, generate-train-config. Check: validate-dataset, then finetune-report. Dashed boxes are stages that are optional or that a flag can skip.</desc>
+<rect x="20" y="20" width="300" height="208" rx="14" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+<text x="36" y="46" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#1e3a5f">1. Annotate</text>
+<rect x="400" y="20" width="300" height="208" rx="14" fill="#faf5ff" stroke="#a855f7" stroke-width="1.5"/>
+<text x="416" y="46" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#3b0764">2. Search</text>
+<rect x="40.0" y="60" width="260" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="170.0" y="80" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#1e3a5f">prepare-inputs</text>
+<text x="170.0" y="99" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#1e3a5f" opacity="0.85">optional, run by hand</text>
+<rect x="40.0" y="152" width="260" height="56" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+<text x="170.0" y="172" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#1e3a5f">finetune-prep</text>
+<text x="170.0" y="191" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#1e3a5f" opacity="0.85">cleaned_structures/</text>
+<rect x="420.0" y="60" width="260" height="56" rx="8" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="550.0" y="80" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#3b0764">generate-msas or import-msas</text>
+<text x="550.0" y="99" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#3b0764" opacity="0.85">organized_msas/</text>
+<rect x="420.0" y="152" width="260" height="56" rx="8" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="550.0" y="180.0" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#3b0764">fetch-templates</text>
+<line x1="170.0" y1="120.0" x2="170.0" y2="137.0" stroke="#3b82f6" stroke-width="2" stroke-dasharray="6 4"/>
+<polygon points="170.0,147.0 164.5,137.0 175.5,137.0" fill="#3b82f6"/>
+<line x1="550.0" y1="120.0" x2="550.0" y2="137.0" stroke="#a855f7" stroke-width="2" stroke-dasharray="6 4"/>
+<polygon points="550.0,147.0 544.5,137.0 555.5,137.0" fill="#a855f7"/>
+<line x1="326.0" y1="124.0" x2="382.0" y2="124.0" stroke="#8a8a8a" stroke-width="2.5"/>
+<polygon points="394.0,124.0 382.0,130.6 382.0,117.4" fill="#8a8a8a"/>
+<rect x="20" y="318" width="300" height="484" rx="14" fill="#fefce8" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="36" y="344" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#713f12">3. Hand off</text>
+<rect x="400" y="318" width="300" height="208" rx="14" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+<text x="416" y="344" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#14532d">Check</text>
+<rect x="40.0" y="358" width="260" height="56" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="170.0" y="378" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#713f12">materialize-dataset-cache</text>
+<text x="170.0" y="397" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#713f12" opacity="0.85">dataset_cache.json</text>
+<rect x="40.0" y="450" width="260" height="56" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="170.0" y="478.0" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#713f12">preprocess-templates</text>
+<rect x="40.0" y="542" width="260" height="56" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+<text x="170.0" y="562" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#713f12">NPZ structure files</text>
+<text x="170.0" y="581" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#713f12" opacity="0.85">of3_compressed_structures/</text>
+<rect x="40.0" y="634" width="260" height="56" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="170.0" y="662.0" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#713f12">split-dataset</text>
+<rect x="40.0" y="726" width="260" height="56" rx="8" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="170.0" y="746" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#713f12">generate-train-config</text>
+<text x="170.0" y="765" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#713f12" opacity="0.85">train.yml</text>
+<polygon points="163.0,419 177.0,419 177.0,433 185.0,433 170.0,445 155.0,433 163.0,433" fill="#ca8a04"/>
+<polygon points="163.0,511 177.0,511 177.0,525 185.0,525 170.0,537 155.0,525 163.0,525" fill="#ca8a04"/>
+<polygon points="163.0,603 177.0,603 177.0,617 185.0,617 170.0,629 155.0,617 163.0,617" fill="#ca8a04"/>
+<polygon points="163.0,695 177.0,695 177.0,709 185.0,709 170.0,721 155.0,709 163.0,709" fill="#ca8a04"/>
+<rect x="420.0" y="358" width="260" height="56" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="550.0" y="378" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#14532d">validate-dataset</text>
+<text x="550.0" y="397" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#14532d" opacity="0.85">validation.json</text>
+<rect x="420.0" y="450" width="260" height="56" rx="8" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="550.0" y="470" text-anchor="middle" dominant-baseline="central" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="600" fill="#14532d">finetune-report</text>
+<text x="550.0" y="489" text-anchor="middle" dominant-baseline="central" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" fill="#14532d" opacity="0.85">report/index.html</text>
+<line x1="550.0" y1="418.0" x2="550.0" y2="435.0" stroke="#22c55e" stroke-width="2" stroke-dasharray="6 4"/>
+<polygon points="550.0,445.0 544.5,435.0 555.5,435.0" fill="#22c55e"/>
+<line x1="326.0" y1="422.0" x2="382.0" y2="422.0" stroke="#8a8a8a" stroke-width="2.5"/>
+<polygon points="394.0,422.0 382.0,428.6 382.0,415.4" fill="#8a8a8a"/>
+<line x1="415.1" y1="234.0" x2="290.4" y2="306.0" stroke="#8a8a8a" stroke-width="2.5"/>
+<polygon points="280.0,312.0 287.1,300.3 293.7,311.7" fill="#8a8a8a"/>
+</svg>

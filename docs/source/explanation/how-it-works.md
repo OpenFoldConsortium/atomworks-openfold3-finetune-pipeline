@@ -4,45 +4,9 @@ The pipeline turns a directory of mmCIF files into everything OpenFold3 needs to
 
 ## The three steps
 
-`finetune-pipeline` runs these commands from top to bottom. Dashed boxes are stages that are optional or that a flag can skip.
+`finetune-pipeline` runs these commands in the order the arrows show. Dashed boxes are stages that are optional or that a flag can skip.
 
-```mermaid
-flowchart TD
-    subgraph annotate["1. Annotate"]
-        prepare(["prepare-inputs<br/>optional, run by hand"]) -.-> prep["finetune-prep<br/>cleaned_structures/"]
-    end
-    subgraph search["2. Search"]
-        msas["generate-msas or import-msas<br/>organized_msas/"] --> fetch["fetch-templates"]
-    end
-    subgraph handoff["3. Hand off"]
-        cache["materialize-dataset-cache<br/>dataset_cache.json"] --> pretemplates["preprocess-templates"]
-        pretemplates --> npz["NPZ structure files"] --> split["split-dataset"]
-        split --> config["generate-train-config<br/>train.yml"]
-    end
-    subgraph check["Check"]
-        validate["validate-dataset"] --> report(["finetune-report<br/>report/index.html"])
-    end
-    prep --> msas
-    fetch --> cache
-    config --> validate
-
-    classDef annotate fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
-    classDef search fill:#f3e8ff,stroke:#a855f7,color:#3b0764
-    classDef handoff fill:#fef9c3,stroke:#eab308,color:#713f12
-    classDef check fill:#dcfce7,stroke:#22c55e,color:#14532d
-    class prepare,prep annotate
-    class msas,fetch search
-    class cache,pretemplates,npz,split,config handoff
-    class validate,report check
-    style prepare stroke-dasharray: 5 5
-    style msas stroke-dasharray: 5 5
-    style fetch stroke-dasharray: 5 5
-    style pretemplates stroke-dasharray: 5 5
-    style split stroke-dasharray: 5 5
-    style config stroke-dasharray: 5 5
-    style validate stroke-dasharray: 5 5
-    style report stroke-dasharray: 5 5
-```
+![The pipeline's commands in run order, in four groups: 1. Annotate, 2. Search, 3. Hand off and Check](../images/pipeline-overview.svg)
 
 | Stage | Runs when |
 |---|---|
