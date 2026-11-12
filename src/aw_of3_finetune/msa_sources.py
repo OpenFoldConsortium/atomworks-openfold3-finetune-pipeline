@@ -175,13 +175,13 @@ class SourceScan:
     Attributes:
         source: Source name.
         files: A3M files whose query is a dataset sequence.
-        unmatched: A3M files whose query matches no dataset sequence (imported all the same).
+        unmatched: A3M files whose query matches no dataset sequence; skipped (not checked, not copied).
         ignored: Selected files that are not A3M (by extension).
     """
 
     source: str
     files: list[ScannedFile]
-    unmatched: list[ScannedFile]
+    unmatched: list[Path]
     ignored: list[Path]
 
 
@@ -236,6 +236,27 @@ def query_sequence(text: str) -> str:
     return "".join(lines)
 
 
+def _read_head(path: Path) -> str:
+    """The text of an MSA file up to the end of its query sequence (enough to identify it).
+
+    Args:
+        path: MSA file (.gz / .zst decompressed).
+
+    Returns:
+        The first line through the query's last line.
+    """
+    lines: list[str] = []
+    headers = 0
+    with open_file(path) as f:
+        for line in f:
+            if line.startswith(">"):
+                headers += 1
+                if headers == 2:
+                    break
+            lines.append(line)
+    return "".join(lines)
+
+
 def _is_a3m(path: Path) -> bool:
     return path.name.endswith(A3M_EXTENSIONS)
 
@@ -267,7 +288,8 @@ def scan_sources(
     Per A3M file: refuse ColabFold complex A3Ms; hash the query; refuse two files with
     one query in a source; run OpenFold3's A3M parser (and, for sources OpenFold3 pairs
     on, its species-header parser); refuse a file whose store copy exists with other
-    content. Files whose query is not a dataset sequence are listed apart, not refused.
+    content. Files whose query is not a dataset sequence are only listed: they are not
+    parsed or copied, so a large library of unrelated MSAs costs one header read per file.
 
     Args:
         manifest: From load_msa_sources_manifest.
@@ -284,7 +306,7 @@ def scan_sources(
     scans: list[SourceScan] = []
     for name, spec in manifest.items():
         files: list[ScannedFile] = []
-        unmatched: list[ScannedFile] = []
+        unmatched: list[Path] = []
         ignored = [p for p in spec.files if not _is_a3m(p)]
         seen: dict[str, Path] = {}
         a3ms = [p for p in spec.files if _is_a3m(p)]
@@ -292,20 +314,24 @@ def scan_sources(
             problems.append(f"{name}: no A3M files ({', '.join(A3M_EXTENSIONS)}) in {spec.spec!r}")
         for path in a3ms:
             try:
-                text = read_msa_text(path)
+                head = _read_head(path)
             except Exception as exc:  # noqa: BLE001
                 problems.append(f"{name}: {path}: cannot read: {exc}")
                 continue
-            if _COMPLEX_A3M_HEADER.match(text):
+            if _COMPLEX_A3M_HEADER.match(head):
                 problems.append(
                     f"{name}: {path}: multi-chain (complex) A3M; only per-sequence MSAs are accepted"
                 )
                 continue
             try:
-                rep_id = alignment_rep_id(query_sequence(text))
+                rep_id = alignment_rep_id(query_sequence(head))
             except ValueError as exc:
                 problems.append(f"{name}: {path}: {exc}")
                 continue
+            if rep_id not in queries:  # skipped: not parsed, not copied
+                unmatched.append(path)
+                continue
+            text = read_msa_text(path)
             if rep_id in seen:
                 problems.append(f"{name}: {seen[rep_id]} and {path} have the same query sequence")
                 continue
@@ -320,8 +346,7 @@ def scan_sources(
                     f"({stored}); delete {MSA_SOURCES_DIRNAME}/{name}/ to replace it"
                 )
                 continue
-            scanned = ScannedFile(path=path, source=name, rep_id=rep_id)
-            (files if rep_id in queries else unmatched).append(scanned)
+            files.append(ScannedFile(path=path, source=name, rep_id=rep_id))
         scans.append(SourceScan(source=name, files=files, unmatched=unmatched, ignored=ignored))
     if problems:
         raise MsaSourcesError("Problems with the user MSAs:\n  " + "\n  ".join(problems))
@@ -491,7 +516,7 @@ def import_user_msas(output_dir: Path, msa_dir: Path, manifest_path: Path) -> Im
     scans = scan_sources(manifest, queries, store_root)
 
     for scan in scans:
-        for scanned in [*scan.files, *scan.unmatched]:
+        for scanned in scan.files:
             dest = store_path(store_root, scanned.source, scanned.rep_id)
             if dest.exists():  # identical content, checked by scan_sources
                 continue

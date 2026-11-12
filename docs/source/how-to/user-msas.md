@@ -62,7 +62,7 @@ Every file is checked before anything is copied, and all problems are reported t
 - **Duplicates.** Two files in one source with the same query sequence are an error.
 - **Reruns.** Importing the same files again changes nothing. A different MSA for a sequence already imported is an error; delete `<organized-msa-dir>/msa_sources/<source>/` to replace that source.
 
-Files whose query matches no chain in the dataset are listed as a warning, usually because the query row is not the chain's SEQRES sequence. Chains with no MSA from any source are counted as a warning, not an error.
+Files whose query matches no chain in the dataset are skipped: they are not checked or copied, so pointing the manifest at a whole MSA library is fine. They are listed as a warning in case one should have matched, usually because its query row is not the chain's SEQRES sequence. Chains with no MSA from any source are counted as a warning, not an error.
 
 `validate-dataset` checks the query row of every MSA, and that `train.yml` reads every source.
 

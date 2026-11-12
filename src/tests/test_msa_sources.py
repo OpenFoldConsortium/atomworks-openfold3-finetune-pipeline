@@ -212,7 +212,7 @@ class TestScanSources:
 
         scan = scan_sources({"s": _spec("s", f)}, _queries(SEQ_A), tmp_path / "store")
 
-        assert [u.path for u in scan[0].unmatched] == [f]
+        assert scan[0].unmatched == [f]
 
     def test_query_with_insertions_is_unmatched(self, tmp_path):
         """A query row with lowercase or gaps does not hash to the chain: reported unmatched by filename."""
@@ -221,7 +221,7 @@ class TestScanSources:
 
         scan = scan_sources({"s": _spec("s", lower, gapped)}, _queries(SEQ_A), tmp_path / "store")
 
-        assert sorted(u.path for u in scan[0].unmatched) == sorted([lower, gapped])
+        assert sorted(scan[0].unmatched) == sorted([lower, gapped])
         assert scan[0].files == []
 
     def test_wrapped_query_is_matched(self, tmp_path):
@@ -240,7 +240,27 @@ class TestScanSources:
         scan = scan_sources({"s": _spec("s", one, two)}, _queries(SEQ_A), tmp_path / "store")
 
         assert [x.path for x in scan[0].files] == [one]
-        assert [x.path for x in scan[0].unmatched] == [two]
+        assert scan[0].unmatched == [two]
+
+    def test_unmatched_files_are_not_format_checked(self, tmp_path):
+        """A malformed file for a chain outside the dataset does not block the import."""
+        good = _touch(tmp_path / "good.a3m", _a3m(SEQ_A))
+        broken = _touch(tmp_path / "broken.a3m", _a3m(SEQ_B, [("h", SEQ_B + "K")]))
+
+        scan = scan_sources({"s": _spec("s", good, broken)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert [x.path for x in scan[0].files] == [good]
+        assert scan[0].unmatched == [broken]
+
+    def test_unmatched_duplicates_are_not_errors(self, tmp_path):
+        """Two files for the same out-of-dataset sequence are skipped, not refused."""
+        one = _touch(tmp_path / "one.a3m", _a3m(SEQ_B))
+        two = _touch(tmp_path / "two.a3m", _a3m(SEQ_B))
+        good = _touch(tmp_path / "good.a3m", _a3m(SEQ_A))
+
+        scan = scan_sources({"s": _spec("s", one, two, good)}, _queries(SEQ_A), tmp_path / "store")
+
+        assert sorted(scan[0].unmatched) == [one, two]
 
     def test_duplicate_in_source_errors(self, tmp_path):
         one = _touch(tmp_path / "one.a3m", _a3m(SEQ_A))
@@ -539,11 +559,11 @@ class TestImportUserMsas:
     def test_failed_scan_copies_nothing(self, cif_protein_monomer, tmp_path):
         output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
         _touch(tmp_path / "a" / "good.a3m", _a3m(seq))
-        _touch(tmp_path / "a" / "bad.a3m", _a3m(seq[:-1] + "W", [("h", seq + "K")]))
+        _touch(tmp_path / "b" / "bad.a3m", _a3m(seq, [("h", seq + "K")]))
         msa_dir = tmp_path / "msas"
 
         with pytest.raises(MsaSourcesError, match="bad.a3m"):
-            import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"a": "a"}))
+            import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"a": "a", "b": "b"}))
 
         assert not (msa_dir / "msa_sources").exists()
         assert not (msa_dir / "msa_index.yml").exists()
@@ -572,10 +592,10 @@ class TestImportUserMsas:
         summary = import_user_msas(output_dir, msa_dir, _write_manifest(tmp_path / "m.yml", {"src": "src"}))
 
         assert summary.covered == {"src": 0}
-        assert [u.path for u in summary.scans[0].unmatched] == [other]
+        assert summary.scans[0].unmatched == [other]
         assert summary.reorganize.missing == 1
-        # Still imported: the store is keyed by sequence, so a later dataset with this chain finds it.
-        assert (msa_dir / "msa_sources" / "src" / alignment_rep_id(SEQ_B)[:2] / f"{alignment_rep_id(SEQ_B)}.a3m.gz").exists()
+        # Skipped: files for chains outside this dataset are not copied into the store.
+        assert not list((msa_dir / "msa_sources").rglob("*.a3m.gz"))
 
 
 class TestImportMsasCli:
@@ -590,7 +610,7 @@ class TestImportMsasCli:
         )
 
         assert result.exit_code == 0, result.output
-        assert "my_lab_db" in result.stdout and "covers 1" in result.stdout
+        assert "my_lab_db: imported 1 file(s)" in result.stdout and "covers 1" in result.stdout
         assert "other.a3m" in result.stderr  # unmatched files are a warning
         assert (output_dir / "organized_msas" / "of3_alignments" / alignment_rep_id(seq) / "my_lab_db.a3m").exists()
 

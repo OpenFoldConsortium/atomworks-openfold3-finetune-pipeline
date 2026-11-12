@@ -878,16 +878,16 @@ def import_msas(output_dir: Path, msa_dir: Path | None, manifest_path: Path) -> 
         raise click.ClickException(str(error)) from error
     for scan in summary.scans:
         click.echo(
-            f"{scan.source}: imported {len(scan.files) + len(scan.unmatched)} file(s), "
+            f"{scan.source}: imported {len(scan.files)} file(s), "
             f"covers {summary.covered[scan.source]} dataset sequence(s)"
         )
         if scan.unmatched:
-            shown = [str(u.path) for u in scan.unmatched[:UNMATCHED_LISTING_CAP]]
+            shown = [str(path) for path in scan.unmatched[:UNMATCHED_LISTING_CAP]]
             more = len(scan.unmatched) - len(shown)
             listing = "\n    ".join(shown + ([f"... and {more} more"] if more else []))
             click.echo(
                 f"  WARNING: {scan.source}: {len(scan.unmatched)} file(s) match no sequence in this "
-                f"dataset (imported all the same). Usually the query row is not the chain's SEQRES "
+                f"dataset and were skipped. If one should match, its query row is likely not the chain's SEQRES "
                 f"sequence:\n    {listing}",
                 err=True,
             )
