@@ -490,6 +490,30 @@ class ImportSummary:
     linked: dict[str, Path] = field(default_factory=dict)
 
 
+def _not_an_msa_folder_message(folder: Path) -> str:
+    """Explain why a folder can't be used as --msa-sources, and what to pass instead.
+
+    Args:
+        folder: The folder given.
+
+    Returns:
+        The message; it shows a manifest for the folder when it holds A3M files.
+    """
+    message = (
+        f"{folder} is not an MSA folder from an earlier run: it has no {MSA_INDEX_NAME} and no "
+        f"{COLABFOLD_UNPAIRED_DIRNAME}/. A folder passed to --msa-sources must be the "
+        "--organized-msa-dir of an earlier generate-msas or import-msas run."
+    )
+    n_a3m = sum(1 for p in folder.rglob("*") if p.is_file() and _is_a3m(p))
+    if n_a3m:
+        message += (
+            f"\nIt holds {n_a3m} A3M file(s). To use your own MSAs, write a sources manifest that names "
+            "their source (the alignment name OpenFold3 reads, e.g. uniref90_hits) and pass that file "
+            f"instead:\n\n  # msa_sources.yml\n  <source_name>: {folder}"
+        )
+    return message
+
+
 def linked_msa_stores(folder: Path) -> dict[str, Path]:
     """The stores of an earlier run's MSA folder, as absolute paths to link to.
 
@@ -506,10 +530,7 @@ def linked_msa_stores(folder: Path) -> dict[str, Path]:
     """
     index = read_msa_index(folder)
     if not index:
-        raise MsaSourcesError(
-            f"{folder}: no MSA sources found (no {MSA_INDEX_NAME} and no {COLABFOLD_UNPAIRED_DIRNAME}/). "
-            "Pass an MSA folder from an earlier run, or a sources manifest file."
-        )
+        raise MsaSourcesError(_not_an_msa_folder_message(folder))
     problems = [
         f"{name}: store {store} listed in {folder / MSA_INDEX_NAME} does not exist"
         for name, store in index.items() if not store.is_dir()

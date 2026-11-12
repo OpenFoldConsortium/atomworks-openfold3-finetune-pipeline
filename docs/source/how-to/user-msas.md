@@ -2,6 +2,15 @@
 
 By default the pipeline sends every protein sequence to the public ColabFold server. If your sequences cannot leave your network, search them yourself (with a local ColabFold or MMseqs2 server, HHblits, jackhmmer, or anything else that writes A3M) and give the pipeline the results instead. ColabFold is then never contacted.
 
+`--msa-sources` takes one of two things:
+
+| You have | Pass to `--msa-sources` | See |
+|---|---|---|
+| Your own MSA files, from any search tool | A sources manifest that names each source | Steps 1 and 2 below |
+| The MSA folder of an earlier `finetune-pipeline`, `generate-msas` or `import-msas` run | That folder | [Reuse MSAs from an earlier run](#reuse-msas-from-an-earlier-run) |
+
+A folder of your own A3M files is not accepted on its own, because the pipeline cannot tell which source they are. Passing one gives an error that shows the manifest to write.
+
 ## What you need
 
 - **Local copies of your MSAs.** The pipeline reads files on local disk only.
@@ -63,7 +72,7 @@ Files whose query matches no chain in the dataset are skipped: they are not chec
 
 ## Reuse MSAs from an earlier run
 
-To reuse MSAs from an earlier run, pass that run's MSA folder to `--msa-sources` instead of a manifest. This works for ColabFold MSAs from `generate-msas`, including folders made before `msa_index.yml` existed, and for MSAs you imported earlier. The new run can use any output directory, and ColabFold is never contacted.
+To reuse MSAs from an earlier run, pass that run's MSA folder (its `--organized-msa-dir`, by default `<output-dir>/organized_msas`) to `--msa-sources` instead of a manifest. This works for ColabFold MSAs from `generate-msas`, including folders made before `msa_index.yml` existed, and for MSAs you imported earlier. The new run can use any output directory, and ColabFold is never contacted.
 
 ```bash
 pixi run finetune-pipeline \

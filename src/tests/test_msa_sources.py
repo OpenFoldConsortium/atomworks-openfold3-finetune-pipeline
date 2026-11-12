@@ -658,12 +658,29 @@ class TestImportFromEarlierFolder:
 
         assert summary.linked == {"my_lab_db": (earlier / "msa_sources" / "my_lab_db").resolve()}
 
-    def test_folder_without_msas_errors(self, cif_protein_monomer, tmp_path):
+    def test_folder_that_is_not_an_msa_folder_errors(self, cif_protein_monomer, tmp_path):
         output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
         _touch(tmp_path / "random" / "notes.txt")
 
-        with pytest.raises(MsaSourcesError, match="no MSA sources"):
+        with pytest.raises(MsaSourcesError, match="not an MSA folder from an earlier run"):
             import_user_msas(output_dir, tmp_path / "new", tmp_path / "random")
+
+        assert not (tmp_path / "new").exists()
+
+    def test_folder_of_your_own_msas_explains_the_manifest(self, cif_protein_monomer, tmp_path):
+        """A folder of the user's own A3Ms (no manifest written) gets a message saying how to write one."""
+        output_dir, seq = _dataset(cif_protein_monomer, tmp_path)
+        own = tmp_path / "my_msas"
+        _touch(own / "chain_a" / "uniref90.a3m", _a3m(seq))
+
+        with pytest.raises(MsaSourcesError) as error:
+            import_user_msas(output_dir, tmp_path / "new", own)
+
+        message = str(error.value)
+        assert "holds 1 A3M file(s)" in message
+        assert "sources manifest" in message
+        assert f"<source_name>: {own}" in message
+        assert not (tmp_path / "new").exists()
 
     def test_folder_whose_store_is_missing_errors(self, cif_protein_monomer, tmp_path):
         output_dir, _ = _dataset(cif_protein_monomer, tmp_path)
