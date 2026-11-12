@@ -13,7 +13,7 @@ build:
           exit 183;
         fi
     pre_install:
-      - pip install "sphinx>=8" "myst-parser>=4" "furo>=2024.8.6"
+      - pip install "sphinx>=8" "myst-parser>=4" "furo>=2024.8.6" "sphinxcontrib-mermaid>=2.1.1"
 
 sphinx:
   configuration: docs/source/conf.py

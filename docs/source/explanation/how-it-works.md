@@ -15,7 +15,8 @@ flowchart TD
     end
 
     subgraph search["2. Search: MSAs and templates"]
-        msas["generate-msas<br/>of3_alignments/ in --msa-dir"]
+        imported["import-msas<br/>organized_msas/"]
+        msas["generate-msas<br/>organized_msas/"]
         fetch["fetch-templates"]
         msas -. "unless --no-templates" .-> fetch
     end
@@ -25,13 +26,13 @@ flowchart TD
         pretemplates["preprocess-templates"]
         npz["NPZ structure files<br/>of3_compressed_structures/"]
         split["split-dataset"]
-        config["generate-train-config<br/>train.yml<br/>needs --msa-dir"]
-        cache -. "unless --no-templates" .-> pretemplates
+        config["generate-train-config<br/>train.yml<br/>needs an MSA folder"]
+        cache -. "after fetch-templates" .-> pretemplates
         pretemplates -.-> npz
         cache --> npz
         npz -. "with --split-csv" .-> split
         split -.-> config
-        npz --> config
+        npz -.-> config
     end
 
     subgraph check["Check"]
@@ -40,22 +41,30 @@ flowchart TD
         validate -. "unless --skip-report" .-> report
     end
 
-    prep -. "with --msa-dir" .-> msas
+    prep -. "with --msa-sources" .-> imported
+    prep -. "with --organized-msa-dir<br/>and no --msa-sources" .-> msas
     prep --> cache
-    msas --> cache
+    imported -.-> cache
+    msas -.-> cache
     fetch -.-> cache
     config -. "unless --skip-validation" .-> validate
 
     classDef optional stroke-dasharray: 5 5
-    class prepare,fetch,pretemplates,split,config,validate,report optional
+    class prepare,imported,msas,fetch,pretemplates,split,config,validate,report optional
 ```
 
-Without `--msa-dir`, step 2, the template stages and `generate-train-config` are skipped. Dashed boxes are the stages that can be skipped.
+Step 2 runs one of two commands, or neither:
+
+- With `--msa-sources`, `import-msas` imports your own MSAs. The template stages are skipped, because templates with `--msa-sources` are not supported yet.
+- With `--organized-msa-dir` and no `--msa-sources`, `generate-msas` queries ColabFold, then `fetch-templates` and `preprocess-templates` run unless you pass `--no-templates`.
+- With neither, step 2 is skipped.
+
+`generate-train-config` runs whenever there is an MSA folder: one from step 2, or an `<output-dir>/organized_msas` left by an earlier run. Dashed boxes are the stages that can be skipped.
 
 | Step | Commands | Output |
 |---|---|---|
 | **1. Annotate** | `prepare-inputs` (optional), `finetune-prep` | Cleaned CIFs with OpenFold3 metadata, and reference molecules |
-| **2. Search** | `generate-msas`, `fetch-templates` | MSAs and template structures |
+| **2. Search** | `import-msas` or `generate-msas`, then `fetch-templates` | MSAs and template structures |
 | **3. Hand off** | `materialize-dataset-cache`, `preprocess-templates`, NPZ structure files, `split-dataset`, `generate-train-config` | The dataset cache, NPZ files and `train.yml` |
 | **Check** | `validate-dataset`, `finetune-report` | `validation.json` and `report/index.html` |
 
