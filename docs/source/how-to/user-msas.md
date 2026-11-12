@@ -27,7 +27,7 @@ mgnify_hits: "searches/*/mgnify_hits.a3m"   # a glob: one file per chain folder
 uniprot_hits: searches/uniprot
 ```
 
-The source name becomes the file name OpenFold3 reads, so it decides how training uses the MSA:
+The source name becomes the file name OpenFold3 reads, and should describe where the MSAs came from, such as the database searched. The name also decides how training uses the MSA:
 
 | Source name | What training does with it |
 |---|---|
