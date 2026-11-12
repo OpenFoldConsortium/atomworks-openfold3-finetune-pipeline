@@ -22,7 +22,7 @@ def _args(built, ccd_path, *extra):
     return [
         "--output-dir", str(built.output_dir),
         "--cif-dir", str(built.cif_dir),
-        "--msa-dir", str(built.msa_dir),
+        "--organized-msa-dir", str(built.msa_dir),
         "--ccd-path", str(ccd_path),
         "--skip-dataset-load",
         *extra,
@@ -403,12 +403,12 @@ def test_validation_json_records_no_drop_without_allow_errors(built_dataset, ccd
 def test_validate_rejects_nonexistent_msa_dir(built_dataset, ccd_path, tmp_path):
     """A nonexistent --msa-dir is a usage error (exit 2) that names the option."""
     args = _args(built_dataset, ccd_path)
-    args[args.index("--msa-dir") + 1] = str(tmp_path / "nope")
+    args[args.index("--organized-msa-dir") + 1] = str(tmp_path / "nope")
 
     result = CliRunner().invoke(validate, args)
 
     assert result.exit_code == 2
-    assert "--msa-dir" in result.output
+    assert "--organized-msa-dir" in result.output
 
 
 def test_validate_skip_dataset_load_records_v21_info(built_dataset, ccd_path, tmp_path):
@@ -448,7 +448,7 @@ def _split_with_train_yml(built, tmp_path, csv_text):
     csv = tmp_path / "my_split.csv"
     csv.write_text(csv_text)
     result = CliRunner().invoke(split_dataset, [
-        "--output-dir", str(built.output_dir), "--split-csv", str(csv), "--msa-dir", str(built.msa_dir),
+        "--output-dir", str(built.output_dir), "--split-csv", str(csv), "--organized-msa-dir", str(built.msa_dir),
     ], catch_exceptions=False)
     assert result.exit_code == 0, result.output
 

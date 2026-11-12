@@ -13,12 +13,14 @@
 | `cleanup_settings.json` | The cleanup settings used |
 | `cleanup_steps/<id>.json` | What each cleanup step did to a structure |
 | `validation.json` | Findings of the V checks |
-| `train.yml` | OpenFold3 training config. Written only with `--msa-dir` |
+| `train.yml` | OpenFold3 training config. Written only when there is an MSA folder |
 | `report/index.html` | The validation report |
 | `split/` | Train and validation caches, with `--split-csv` |
 | `training_output/` | Checkpoints, once you train |
 
-## `<msa-dir>`
+## `<organized-msa-dir>`
+
+The MSA folder. Default: `<output-dir>/organized_msas`.
 
 | Path | What it is |
 |---|---|

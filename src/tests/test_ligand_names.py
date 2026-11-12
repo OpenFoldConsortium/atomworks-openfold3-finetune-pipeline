@@ -143,7 +143,7 @@ def test_full_pipeline_stops_before_the_msa_stage(tmp_path, ccd_path):
     result = CliRunner().invoke(
         finetune_pipeline,
         ["--cif-dir", str(cif_dir), "--output-dir", str(tmp_path / "out"),
-         "--msa-dir", str(tmp_path / "msas"), "--ccd-path", str(ccd_path), "--name", "t"],
+         "--organized-msa-dir", str(tmp_path / "msas"), "--ccd-path", str(ccd_path), "--name", "t"],
     )
 
     assert result.exit_code == 1

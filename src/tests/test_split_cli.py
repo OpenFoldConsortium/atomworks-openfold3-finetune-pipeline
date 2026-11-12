@@ -42,7 +42,7 @@ def test_without_msa_dir_says_to_run_generate_train_config(built_copy, tmp_path)
 def test_with_msa_dir_writes_train_yml_with_validation(built_copy, tmp_path):
     msa_dir = tmp_path / "msas"
     msa_dir.mkdir()
-    result = invoke(built_copy, tmp_path, extra=["--msa-dir", str(msa_dir)])
+    result = invoke(built_copy, tmp_path, extra=["--organized-msa-dir", str(msa_dir)])
     config = yaml.safe_load((built_copy.output_dir / "train.yml").read_text())
     assert result.exit_code == 0
     assert "val-weighted-pdb" in config["dataset_configs"]["validation"]
@@ -65,7 +65,7 @@ def test_msa_dir_path_shares_generate_train_config_legacy_warning(built_copy, tm
     cache_path.write_text(json.dumps(cache, indent=4))
     msa_dir = tmp_path / "msas"
     msa_dir.mkdir()
-    result = invoke(built_copy, tmp_path, extra=["--msa-dir", str(msa_dir)])
+    result = invoke(built_copy, tmp_path, extra=["--organized-msa-dir", str(msa_dir)])
     expected_text = "built before interface keys"
     assert expected_text in result.output
 

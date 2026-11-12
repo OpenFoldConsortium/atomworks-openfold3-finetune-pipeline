@@ -25,7 +25,7 @@ To split during a full run, add `--split-csv`. A typo in the CSV then fails in s
 pixi run finetune-pipeline \
   --cif-dir <dir-of-mmcifs> \
   --output-dir <output-dir> \
-  --msa-dir <msa-dir> \
+  --organized-msa-dir <organized-msa-dir> \
   --ccd-path $CCD_PATH \
   --name <dataset-name> \
   --split-csv my_split.csv
@@ -37,7 +37,7 @@ To split a dataset you already built, use `split-dataset`. This also rewrites `t
 pixi run split-dataset \
   --output-dir <output-dir> \
   --split-csv my_split.csv \
-  --msa-dir <msa-dir>
+  --organized-msa-dir <organized-msa-dir>
 ```
 
 To change the split later, edit the CSV and run `split-dataset` again.

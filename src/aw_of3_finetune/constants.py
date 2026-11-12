@@ -27,3 +27,6 @@ CLEANED_STRUCTURES_DIRNAME = "cleaned_structures"
 
 # finetune-pipeline writes the cleaned structures as OF3 NPZ files (<id>/<id>.npz) here; train.yml, split-dataset and the report read them from here.
 COMPRESSED_STRUCTURES_DIRNAME = "of3_compressed_structures"
+
+# Default MSA folder (--organized-msa-dir) under the output directory: ColabFold output or imported user MSAs, plus of3_alignments/.
+ORGANIZED_MSAS_DIRNAME = "organized_msas"
