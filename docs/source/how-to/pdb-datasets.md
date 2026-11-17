@@ -44,7 +44,6 @@ pixi run prepare-inputs \
   --ligands ligands.csv \
   --constructs constructs.fasta \
   --output-dir <cif-dir> \
-  --ccd-path $CCD_PATH \
   --release-date 2026-01-01
 ```
 
@@ -69,7 +68,6 @@ pixi run finetune-pipeline \
   --cif-dir <cif-dir> \
   --output-dir <output-dir> \
   --organized-msa-dir <organized-msa-dir> \
-  --ccd-path $CCD_PATH \
   --name <dataset-name>
 ```
 

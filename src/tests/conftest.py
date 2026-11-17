@@ -1,10 +1,10 @@
 """Shared test fixtures for the atomworks-OF3 finetune pipeline tests."""
 
-import os
 from pathlib import Path
 
 import pytest
 
+from aw_of3_finetune.openfold_cache import resolve_ccd_path
 from validate_helpers import build_dataset
 
 # CIFs live in the pipeline repo so tests don't depend on the openfold-3 clone.
@@ -76,16 +76,25 @@ def cif_pxr() -> Path:
     return CIF_PXR
 
 
+# Resolved once at import, before isolate_ccd_settings hides $CCD_PATH and the stored path.
+_CCD_PATH, _CCD_SOURCE = resolve_ccd_path(None)
+
+
+@pytest.fixture(autouse=True)
+def isolate_ccd_settings(tmp_path_factory, monkeypatch):
+    """Hide the user's $CCD_PATH and stored CCD path, so commands see only what a test passes."""
+    monkeypatch.delenv("CCD_PATH", raising=False)
+    monkeypatch.setenv("OPENFOLD_CACHE", str(tmp_path_factory.mktemp("openfold_cache")))
+
+
 @pytest.fixture(scope="session")
 def ccd_path() -> Path:
-    """The CCD file named by the CCD_PATH env var; skips the test if it is unset or missing."""
-    ccd = os.environ.get("CCD_PATH")
-    if not ccd:
-        pytest.skip("CCD_PATH is not set (see 'Get the CCD' in the README)")
-    path = Path(ccd).expanduser()
-    if not path.is_file():
-        pytest.skip(f"CCD_PATH file not found: {path}")
-    return path
+    """The CCD from $CCD_PATH or setup-finetuning's stored path; skips the test if neither is set."""
+    if _CCD_PATH is None:
+        pytest.skip("No CCD set up (run `pixi run setup-finetuning`, or set CCD_PATH)")
+    if not _CCD_PATH.is_file():
+        pytest.skip(f"CCD file not found: {_CCD_PATH} (from {_CCD_SOURCE})")
+    return _CCD_PATH
 
 
 @pytest.fixture(

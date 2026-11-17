@@ -22,6 +22,7 @@ split-dataset = "aw_of3_finetune.cli:split_dataset"
 finetune-pipeline = "aw_of3_finetune.cli:finetune_pipeline"
 validate-dataset = "aw_of3_finetune.cli:validate"
 finetune-report = "aw_of3_finetune.cli:finetune_report"
+setup-finetuning = "aw_of3_finetune.cli:setup_finetuning"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aw_of3_finetune"]

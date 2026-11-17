@@ -26,7 +26,6 @@ pixi run finetune-pipeline \
   --cif-dir <dir-of-mmcifs> \
   --output-dir <output-dir> \
   --organized-msa-dir <organized-msa-dir> \
-  --ccd-path $CCD_PATH \
   --name <dataset-name> \
   --split-csv my_split.csv
 ```

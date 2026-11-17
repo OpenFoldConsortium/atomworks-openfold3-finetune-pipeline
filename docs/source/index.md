@@ -16,16 +16,22 @@ cd atomworks-openfold3-finetune-pipeline
 pixi install
 ```
 
-### 2. Get the CCD
+### 2. Set up the CCD
 
-The pipeline uses the Chemical Component Dictionary (CCD) to identify residues and ligands, and many of the tests need it too. It is not bundled, so download OpenFold3's copy (430 MB). Use this copy rather than wwPDB's latest, whose ligand charges have changed. `CCD_PATH` lasts for the current shell, so set it again in a new one.
+The pipeline uses the Chemical Component Dictionary (CCD) to identify residues and ligands, and many of the tests need it too. It is not bundled. Run this once to download OpenFold3's copy (430 MB) and store its path:
 
 ```bash
-curl -O https://openfold3-data.s3.amazonaws.com/chemical_component_dictionary.cif
-export CCD_PATH=$PWD/chemical_component_dictionary.cif
+pixi run setup-finetuning
 ```
 
-Then run the tests, which are in `src/tests`. If `CCD_PATH` is not set, tests that need the CCD are skipped.
+It downloads the CCD to OpenFold3's cache directory, `~/.openfold3`, and stores its path there in `ccd_path`. After that, every command finds the CCD on its own. OpenFold3's copy is used rather than wwPDB's latest, whose ligand charges have changed.
+
+- **Already have the CCD?** Run `pixi run setup-finetuning --ccd-path <your-ccd.cif>` to store its path instead of downloading it again.
+- **Using another cache directory?** OpenFold3 reads `$OPENFOLD_CACHE` in place of `~/.openfold3`. If you set it when you run setup, set it to the same directory in every shell where you build datasets or train. Otherwise the pipeline and OpenFold3 look in `~/.openfold3` and do not find the CCD or the weights.
+- **Training from OpenFold3's weights?** If you have not already, run `pixi run setup_openfold`. It is OpenFold3's own setup, and downloads the model weights into the same cache directory.
+- **Another CCD for one run?** Pass `--ccd-path`, or set `$CCD_PATH`. Either one overrides the stored path.
+
+Then run the tests, which are in `src/tests`. Tests that need the CCD are skipped if it is not set up.
 
 ```bash
 pixi run test
@@ -40,17 +46,17 @@ Run the pipeline on the two bundled structures in [examples/quickstart](https://
 ```bash
 pixi run finetune-pipeline \
   --cif-dir examples/quickstart \
-  --output-dir output/quickstart \
-  --organized-msa-dir output/quickstart_msas \
-  --ccd-path $CCD_PATH \
+  --organized-msa-dir output/organized_msas \
   --name quickstart
 ```
+
+It writes everything to `./output`. Pass `--output-dir` to write somewhere else.
 
 Most of the run is waiting on the public ColabFold server for MSAs.
 
 ### 4. Check the result
 
-Open `output/quickstart/report/index.html`. It says what is unusual about your structures and whether processing introduced any issues.
+Open `output/report/index.html`. It says what is unusual about your structures and whether processing introduced any issues.
 
 ## Do you need `prepare-inputs`?
 
