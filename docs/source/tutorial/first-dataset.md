@@ -94,7 +94,7 @@ This set has no **Dropped** section. On your own data, that section lists any st
 This section requires a GPU and OpenFold3's pretrained weights, which `train.yml` fine-tunes. The first command downloads the weights, about 2.3 GB, and is needed only once. The second runs a single training step, which confirms that the dataset trains.
 
 ```bash
-pixi run setup_openfold --non-interactive
+pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
 pixi run run_openfold train --runner-yaml=output/tutorial/train.yml
 ```
 

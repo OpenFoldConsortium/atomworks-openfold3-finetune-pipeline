@@ -4,26 +4,21 @@
 
 ## 1. Download OpenFold3's weights first
 
-By default, `train.yml` starts from OpenFold3's pretrained weights, so the weights must be downloaded **before** you run `generate-train-config` or `finetune-pipeline`. Both commands write the path of the weights into `train.yml`, and stop with an error if the file is not there yet. The weights, about 2.3 GB, are downloaded with OpenFold3's own setup command, which is installed in this repository's pixi environment. We recommend running it with `--non-interactive`, which downloads the default weights to `~/.openfold3` without asking any questions. It needs to be run only once:
+By default, `train.yml` starts from OpenFold3's pretrained weights, so the weights must be downloaded **before** you run `generate-train-config` or `finetune-pipeline`. Both commands write the path of the weights into `train.yml`, and stop with an error if the file is not there yet.
+
+The weights, about 2.3 GB, are downloaded with OpenFold3's own setup command, which is installed in this repository's pixi environment. We recommend the following command, which downloads the default weights to `~/.openfold3` without asking any questions, and needs to be run only once:
 
 ```bash
-pixi run setup_openfold --non-interactive
+pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
 ```
 
-Without `--non-interactive`, the command asks a few questions, such as where to download the weights. Pressing Enter at each one accepts the same defaults.
+`--skip-biotite-ccd-update` leaves the copy of the Chemical Component Dictionary bundled with Biotite in this environment unchanged.
+
+The pipeline looks for the weights in the OpenFold3 cache directory, which is `$OPENFOLD_CACHE` if set, and `~/.openfold3` otherwise. To keep the weights in a different directory, see [Downloading OpenFold3 model parameters](https://openfold-3.readthedocs.io/en/latest/Installation.html#downloading-openfold3-model-parameters) in the OpenFold3 documentation, and set `$OPENFOLD_CACHE` to the same directory when you build a dataset.
 
 If the weights are missing, `generate-train-config` stops with an error that gives the path it checked. `finetune-pipeline` checks for the weights before its first stage, so a missing file is reported before any time is spent on MSAs.
 
 The download is not needed if you start from your own weights with `--init-checkpoint`, or from random weights with `--from-scratch` (see [Choose the starting weights](#choose-the-starting-weights)).
-
-### Use a different cache directory
-
-The pipeline looks for the default weights, under the file name that OpenFold3 itself defines, in the OpenFold3 cache directory, which is `$OPENFOLD_CACHE` if set, and `~/.openfold3` otherwise. Note that `setup_openfold` itself does not read `$OPENFOLD_CACHE`, and `--non-interactive` always uses `~/.openfold3`. To keep the weights elsewhere, you can either:
-
-- Run `pixi run setup_openfold` without `--non-interactive`, and enter the directory at the first question.
-- Download or move the weights to any directory later.
-
-In both cases, set `$OPENFOLD_CACHE` to that directory whenever you build a dataset, so that the pipeline finds the weights there.
 
 ## 2. Run training
 
