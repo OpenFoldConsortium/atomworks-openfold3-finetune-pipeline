@@ -192,5 +192,5 @@ Write `train.yml`.
 | `--wandb-project` | None | Log the training run to this Weights & Biases project (OF3's only config-driven logger). |
 | `--wandb-entity` | None | wandb user or team. |
 | `--wandb-name` | None | wandb run name. |
-| `--init-checkpoint` | OpenFold3's default weights | Start fine-tuning from these weights (a `.pt` or `.ckpt` file). Only the model and EMA weights are loaded. See [Train on your dataset](../how-to/training.md). |
-| `--from-scratch` | Off | Start from random weights instead of pretrained ones. |
+| `--init-checkpoint` | OpenFold3's default weights | The weights to start fine-tuning from, as a `.pt` or `.ckpt` file. Only the model and EMA weights are loaded. See [Train on your dataset](../how-to/training.md). |
+| `--from-scratch` | Off | Start from random weights rather than pretrained weights. |

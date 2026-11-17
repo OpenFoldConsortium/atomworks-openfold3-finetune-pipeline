@@ -91,14 +91,14 @@ This set has no **Dropped** section. On your own data, that section lists any st
 
 ## 6. Train for one step (optional)
 
-This needs a GPU and OpenFold3's pretrained weights, which `train.yml` fine-tunes. Download the weights once, about 2.3 GB, then run one training step to prove the dataset trains.
+This section requires a GPU and OpenFold3's pretrained weights, which `train.yml` fine-tunes. The first command downloads the weights, about 2.3 GB, and is needed only once. The second runs a single training step, which confirms that the dataset trains.
 
 ```bash
 pixi run setup_openfold
 pixi run run_openfold train --runner-yaml=output/tutorial/train.yml
 ```
 
-It writes a 6.3 GB checkpoint to `output/tutorial/training_output/checkpoints/last.ckpt`. To choose other starting weights, resume a run or log metrics, see [Train on your dataset](../how-to/training.md).
+Training writes a 6.3 GB checkpoint to `output/tutorial/training_output/checkpoints/last.ckpt`. [Train on your dataset](../how-to/training.md) describes how to choose other starting weights, resume a run and log metrics.
 
 ## Next steps
 
@@ -107,7 +107,7 @@ Point `--cif-dir` at your own mmCIFs and run the same command without `--skip-ex
 - Have `.pdb` files or ligands named `LIG`? See [Prepare a dataset from PDB files](../how-to/pdb-datasets.md).
 - Want to hold out structures? See [Add a validation split](../how-to/validation-split.md).
 - Want to keep waters or short peptides? See [Switch cleanup steps off](../how-to/cleanup-steps.md).
-- Ready to train for real? See [Train on your dataset](../how-to/training.md).
+- To train on your dataset, see [Train on your dataset](../how-to/training.md).
 
 ## Use live MSAs instead
 
