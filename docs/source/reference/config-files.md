@@ -41,6 +41,7 @@ Names are letters, digits, `_` and `-`; `colabfold_paired`, `dummy` and `templat
 | `epoch_len` | `1` | Steps per epoch. Raise it for a real run |
 | `max_epochs` | `1` | Epochs to run. Raise it for a real run |
 | `batch_size` | `1` | Structures per step |
+| `restart_checkpoint_path` | OpenFold3's default weights | The weights training starts from. See [Train on your dataset](../how-to/training.md) |
 | `sample_weights` | See below | How crops are chosen within a structure |
 | `msa` | Protein MSAs, OpenFold3's sources | Which MSA files are read. A source name OpenFold3 does not know is added to `max_seq_counts` and `aln_order` |
 

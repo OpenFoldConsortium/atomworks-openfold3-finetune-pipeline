@@ -91,7 +91,12 @@ from aw_of3_finetune.templates import (
     reorganize_template_alignments_for_of3,
 )
 from aw_of3_finetune.templates import fetch_templates as fetch_templates_for_dataset
-from aw_of3_finetune.training_config import LEGACY_CACHE_WARNING, is_legacy_dataset_cache, write_train_config
+from aw_of3_finetune.training_config import (
+    LEGACY_CACHE_WARNING,
+    default_init_checkpoint,
+    is_legacy_dataset_cache,
+    write_train_config,
+)
 from aw_of3_finetune.validate import CHECKS, Finding, Severity, ValidationContext, run_validation
 from aw_of3_finetune.validate.check_ids import DATASET_LOADS
 
@@ -696,6 +701,19 @@ def materialize_dataset_cache(
     default=None,
     help="wandb run name. Defaults to the output directory's name. Only used with --wandb-project.",
 )
+@click.option(
+    "--init-checkpoint",
+    default=None,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="Start fine-tuning from these weights (a .pt or .ckpt file) instead of OpenFold3's "
+    "default pretrained weights. Only the model and EMA weights are loaded.",
+)
+@click.option(
+    "--from-scratch",
+    is_flag=True,
+    default=False,
+    help="Start from random weights instead of pretrained ones (restart_checkpoint_path: last).",
+)
 @_with_pipeline_logs
 def generate_train_config(
     output_dir: Path,
@@ -704,18 +722,25 @@ def generate_train_config(
     wandb_project: str | None,
     wandb_entity: str | None,
     wandb_name: str | None,
+    init_checkpoint: Path | None = None,
+    from_scratch: bool = False,
 ) -> None:
     """Write an OF3 training runner-yaml pointed at this pipeline's output.
 
     Smoke-test defaults (see training_config.py); adds a validation section when a
-    current split/ exists (split-dataset). Hand-edit for real runs.
+    current split/ exists (split-dataset). Hand-edit for real runs. Training starts
+    from OpenFold3's pretrained weights (pixi run setup_openfold downloads them) unless
+    --init-checkpoint or --from-scratch is given.
     Run from this repository with:
     pixi run run_openfold train --runner-yaml=<config-output>
     """
+    if init_checkpoint is not None and from_scratch:
+        raise click.UsageError("--init-checkpoint and --from-scratch cannot be used together.")
     msa_dir = _require_organized_msa_dir(msa_dir, output_dir)
     config_path = write_train_config(
         output_dir, msa_dir, config_output,
         wandb_project=wandb_project, wandb_entity=wandb_entity, wandb_experiment_name=wandb_name,
+        init_checkpoint=init_checkpoint, from_scratch=from_scratch,
     )
     click.echo(f"Training config: {config_path}")
     cache_path = output_dir / "dataset_cache.json"
@@ -1263,6 +1288,15 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
 @click.option("--wandb-project", default=None, help="Passed through to generate-train-config.")
 @click.option("--wandb-entity", default=None, help="Passed through to generate-train-config.")
 @click.option("--wandb-name", default=None, help="Passed through to generate-train-config.")
+@click.option(
+    "--init-checkpoint",
+    default=None,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="Passed through to generate-train-config: start from these weights instead of "
+    "OpenFold3's default pretrained weights.",
+)
+@click.option("--from-scratch", is_flag=True, default=False,
+              help="Passed through to generate-train-config: start from random weights.")
 @click.option("--write-step-cifs/--no-write-step-cifs", default=False,
               help="Also write the atoms after each cleanup step as a CIF under "
               "<output-dir>/cleanup_steps/<pdb_id>/ (for viewing; default: off).")
@@ -1293,6 +1327,8 @@ def finetune_pipeline(
     wandb_project: str | None,
     wandb_entity: str | None,
     wandb_name: str | None,
+    init_checkpoint: Path | None,
+    from_scratch: bool,
     write_step_cifs: bool,
     cleanup_settings: CleanupSettings,
 ) -> None:
@@ -1311,6 +1347,10 @@ def finetune_pipeline(
     # Only an explicit --organized-msa-dir without --msa-sources contacts ColabFold.
     run_colabfold = msa_dir is not None and msa_sources is None
     msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=msa_sources is None)
+    if init_checkpoint is not None and from_scratch:
+        raise click.UsageError("--init-checkpoint and --from-scratch cannot be used together.")
+    if msa_dir is not None and init_checkpoint is None and not from_scratch:
+        default_init_checkpoint()  # Fail before any stage runs, not at generate-train-config.
     run_templates = run_colabfold and templates
     templates_skipped = (
         "templates with --msa-sources are not supported yet" if msa_sources is not None
@@ -1417,6 +1457,8 @@ def finetune_pipeline(
             wandb_project=wandb_project,
             wandb_entity=wandb_entity,
             wandb_name=wandb_name,
+            init_checkpoint=init_checkpoint,
+            from_scratch=from_scratch,
         )
     else:
         click.echo(

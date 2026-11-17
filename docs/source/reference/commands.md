@@ -42,6 +42,8 @@ Run every stage over a directory of mmCIFs.
 | `--wandb-project` | None | Passed through to generate-train-config. |
 | `--wandb-entity` | None | Passed through to generate-train-config. |
 | `--wandb-name` | None | Passed through to generate-train-config. |
+| `--init-checkpoint` | None | Passed through to generate-train-config. |
+| `--from-scratch` | Off | Passed through to generate-train-config. |
 | `--write-step-cifs` / `--no-write-step-cifs` | Off | Also write the atoms after each cleanup step as a CIF under <output-dir>/cleanup_steps/<pdb_id>/ (for viewing. |
 | `--cleanup-config` | None | YAML/JSON file switching structure-cleanup steps off. |
 
@@ -190,3 +192,5 @@ Write `train.yml`.
 | `--wandb-project` | None | Log the training run to this Weights & Biases project (OF3's only config-driven logger). |
 | `--wandb-entity` | None | wandb user or team. |
 | `--wandb-name` | None | wandb run name. |
+| `--init-checkpoint` | OpenFold3's default weights | The weights to start fine-tuning from, as a `.pt` or `.ckpt` file. Only the model and EMA weights are loaded. See [Train on your dataset](../how-to/training.md). |
+| `--from-scratch` | Off | Start from random weights rather than pretrained weights. |
