@@ -1,16 +1,16 @@
 # How the pipeline works
 
-The pipeline turns a directory of mmCIF files into everything OpenFold3 needs to train. Each structure gets one self-contained annotated CIF, and the rest is built from those.
+The pipeline turns a directory of mmCIF files into everything OpenFold3 needs for training. Each structure is first written as a single self-contained, annotated CIF, and all later outputs are built from these files.
 
 ## The three steps
 
-`finetune-pipeline` runs these commands in the order the arrows show. Dashed boxes are stages that are optional or that a flag can skip.
+`finetune-pipeline` runs these commands in the order shown by the arrows. Dashed boxes are stages that are optional, or that an option can skip.
 
 ![The pipeline's commands in run order, in four groups: 1. Annotate, 2. Search, 3. Hand off and Check](../images/pipeline-overview.svg)
 
 | Stage | Runs when |
 |---|---|
-| `prepare-inputs` | You run it by hand, before the pipeline |
+| `prepare-inputs` | Run separately, before the pipeline |
 | `import-msas` | `--msa-sources` is given |
 | `generate-msas` | `--organized-msa-dir` is given, without `--msa-sources` |
 | `fetch-templates`, `preprocess-templates` | `generate-msas` ran, and `--no-templates` is not given |
@@ -28,38 +28,38 @@ Every other stage always runs.
 | **3. Hand off** | `materialize-dataset-cache`, `preprocess-templates`, NPZ structure files, `split-dataset`, `generate-train-config` | The dataset cache, NPZ files and `train.yml` |
 | **Check** | `validate-dataset`, `finetune-report` | `validation.json` and `report/index.html` |
 
-`finetune-pipeline` runs all three, then validates the dataset and writes the report. `prepare-inputs` is never part of it: run it by hand first if your inputs need it.
+`finetune-pipeline` runs all three steps, then validates the dataset and writes the report. `prepare-inputs` is not part of the pipeline; if your inputs need it, it is run separately beforehand.
 
-Keep the outputs of steps 1 and 2. Step 3 is only what OpenFold3's trainer needs, and you can rebuild it at any time.
+The outputs of steps 1 and 2 should be kept. Step 3 produces only what OpenFold3's trainer needs, and can be rebuilt at any time.
 
 ## Cleaning
 
-The pipeline cleans structures the way OpenFold3 cleans its own training data. Waters, crystallization aids and clashing chains go, for example, and every step is logged per structure.
+The pipeline cleans structures in the same way that OpenFold3 cleans its own training data. For example, waters, crystallization aids and clashing chains are removed, and every step is logged for each structure.
 
-A structure that cleanup empties, or that cannot be prepared, is left out and the run carries on. The report lists it with the reason.
+A structure that cleanup leaves empty, or that cannot be prepared, is left out, and the run continues. The report lists it with the reason.
 
 ## Interfaces
 
-The pipeline records which chains touch each other. Training uses these interfaces to choose crops, and validation scores them.
+The pipeline records which chains are in contact with each other. Training uses these interfaces to choose crops, and validation scores them.
 
 ## MSAs
 
-Each unique protein sequence gets one MSA from the ColabFold server, keyed by a hash of the sequence. Identical chains share it, so 925 structures with 8 sequences need only 8 searches.
+Each unique protein sequence receives one MSA from the ColabFold server, stored under a hash of the sequence. Identical chains share the same MSA, so 925 structures with 8 distinct sequences require only 8 searches.
 
-MSAs live in two layouts. `unpaired/` and `paired/` hold what ColabFold returned, and `of3_alignments/` is the layout OpenFold3 reads. `of3_alignments/` is what `train.yml` points to.
+MSAs are stored in two layouts. `unpaired/` and `paired/` hold the results returned by ColabFold, and `of3_alignments/` is the layout that OpenFold3 reads and that `train.yml` points to.
 
-You can bring your own MSAs instead with `import-msas` (see [Use your own MSAs](../how-to/user-msas.md)). They are stored per source under `msa_sources/`, in the same hashed layout as ColabFold's `unpaired/`. Either way, `msa_index.yml` lists the sources in the folder, and every later step reads that list rather than asking which tool made the MSAs.
+You can provide your own MSAs instead, with `import-msas` (see [Use your own MSAs](../how-to/user-msas.md)). They are stored per source under `msa_sources/`, in the same hashed layout as ColabFold's `unpaired/`. In both cases, `msa_index.yml` lists the sources in the folder, and every later step reads that list rather than depending on which tool produced the MSAs.
 
 ## Templates
 
-Each sequence's ColabFold hits go through these steps, in order:
+The ColabFold template hits for each sequence are filtered in the following order:
 
-1. **`--max-hits`** (50): download the first 50 unique PDB entries. Later hits are dropped here.
-2. **Sequence filters:** drop hits that are near-exact copies of the query, under 10 residues, or cover at most 10% of the query.
-3. **Release date:** a template must be 60 days older than the structure.
-4. **`--max-templates`** (20): keep the 20 best per chain.
+1. **`--max-hits`** (50): the first 50 unique PDB entries are downloaded, and later hits are dropped.
+2. **Sequence filters:** hits are dropped if they are near-exact copies of the query, shorter than 10 residues, or cover at most 10% of the query.
+3. **Release date:** a template must have been released at least 60 days before the structure.
+4. **`--max-templates`** (20): the 20 best templates are kept for each chain.
 
-Step 1 comes first, so if most top hits are copies of the query, few templates survive. With a [fixed cutoff](../how-to/template-cutoff.md), step 3 uses one date for every structure.
+Because step 1 comes first, few templates remain if most of the top hits are copies of the query. With a [fixed cutoff](../how-to/template-cutoff.md), step 3 uses the same date for every structure.
 
 ## Further reading
 

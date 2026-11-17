@@ -1,16 +1,16 @@
 # Why these design decisions
 
-This page records the decisions most likely to surprise you, and why we made them.
+This page records the design decisions that are most likely to be unexpected, and the reasons for them.
 
 ## CA gaps and construct sequences
 
-**In short:** give the pipeline the whole protein sequence, not just the residues in the crystal. Otherwise real gaps look like broken chains.
+**In short:** the pipeline needs the full protein sequence, not only the residues in the crystal structure. Otherwise, real gaps look like broken chains.
 
 ### The problem
 
 A crystal structure rarely contains every residue. Flexible loops and linkers have no modelled atoms, so they are missing from the file.
 
-Take PXR structure x00004-1, with 291 modelled residues:
+For example, PXR structure x00004-1 has 291 modelled residues:
 
 | Author numbers | What it is |
 |---|---|
@@ -22,40 +22,40 @@ Take PXR structure x00004-1, with 291 modelled residues:
 
 ### Why numbering matters
 
-Residue numbers do two jobs, and they conflict when the sequence is incomplete:
+Residue numbers serve two purposes, which conflict when the sequence is incomplete:
 
-- **Indexing:** OpenFold3 uses the number to find a residue's place in the sequence and MSA. With 291 letters, residue 696 runs off the end.
-- **Marking gaps:** OpenFold3 deletes a chain if consecutive residues are over 10 Å apart. It skips the pair only if the numbers jump.
+- **Indexing:** OpenFold3 uses the number to find a residue's position in the sequence and MSA. With a 291-residue sequence, residue 696 falls past the end.
+- **Marking gaps:** OpenFold3 deletes a chain if consecutive residues are more than 10 Å apart. It skips the pair only if the residue numbers are not consecutive.
 
-Renumbering 1 to 291 fixes the first job but breaks the second. Residues 35 and 36 look like neighbours but sit 27.6 Å apart, so the chain is deleted. This removed the protein from all 110 entries in our first PXR run.
+Renumbering the residues from 1 to 291 solves the first problem but causes the second. Residues 35 and 36 appear to be neighbours but are 27.6 Å apart, so the chain is deleted. In our first PXR run, this removed the protein from all 110 entries.
 
 ### What we do
 
-`prepare-inputs --constructs` takes the whole sequence, including unmodelled residues. Numbers then index the real sequence and still jump at gaps, which is how RCSB entries work.
+`prepare-inputs --constructs` takes the full sequence, including unmodelled residues. Residue numbers then index the real sequence and still skip at gaps, as in RCSB entries.
 
-A chain with gaps and no construct is dropped with a clear reason. We prefer that to silently deleting the protein.
+A chain with gaps and no construct sequence is dropped with a clear reason. We prefer this to deleting the protein without notice.
 
 ## Even sampling per structure
 
-**In short:** every structure is equally likely to be drawn, and we don't cluster by similarity.
+**In short:** every structure is equally likely to be sampled, and structures are not clustered by similarity.
 
-OpenFold3 clusters its training data so that near-duplicates don't dominate. Fine-tuning sets are small and often deliberately related, such as one protein with many ligands, so clustering would collapse them.
+OpenFold3 clusters its training data so that near-duplicates do not dominate. Fine-tuning sets are small and often deliberately related, such as one protein with many ligands, so clustering would merge them into a few clusters.
 
 Instead, `cluster_size` is set to the number of chains and interfaces in each structure, which gives every structure the same total weight. The trade-off is that a dataset with many near-duplicates trains on them as often as anything else.
 
 ## Ligand definitions stay in the structure
 
-**In short:** a custom ligand is defined inside its own CIF, and we never change the CCD.
+**In short:** a custom ligand is defined inside its own CIF, and the CCD is never modified.
 
-`LIG` is a real CCD code for an unrelated molecule, so trusting the name would give the wrong chemistry. `prepare-inputs` gives each ligand a new code, checks that the code is not in the CCD, and writes its definition into the CIF.
+`LIG` is a real CCD code for an unrelated molecule, so relying on the name would give the wrong chemistry. `prepare-inputs` gives each ligand a new code, checks that the code is not in the CCD, and writes the ligand's definition into the CIF.
 
-Bond orders come from the SMILES you provide, never from a guess. A SMILES that does not fit the ligand's atoms drops the structure.
+Bond orders come from the SMILES you provide, and are never inferred. If a SMILES does not fit the ligand's atoms, the structure is dropped.
 
-## Drop and carry on
+## Drop and continue
 
-**In short:** one bad structure does not stop the run, but it is always reported.
+**In short:** a single invalid structure does not stop the run, but it is always reported.
 
-A failure in a large dataset should not cost you the rest of the run. So a structure that cannot be prepared is left out with its reason, and the report lists it.
+A failure in one structure of a large dataset should not stop the rest of the run. A structure that cannot be prepared is therefore left out, and the report lists it with the reason.
 
-Errors that affect everything are different. If the ligand codes collide with the CCD, the whole command stops.
+Errors that affect the whole dataset are handled differently. For example, if the ligand codes collide with the CCD, the whole command stops.
 

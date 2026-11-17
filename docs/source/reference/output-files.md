@@ -15,12 +15,12 @@
 | `validation.json` | Findings of the V checks |
 | `train.yml` | OpenFold3 training config. Written only when there is an MSA folder |
 | `report/index.html` | The validation report |
-| `split/` | Train and validation caches, with `--split-csv` |
-| `training_output/` | Checkpoints, once you train |
+| `split/` | Train and validation caches, written with `--split-csv` |
+| `training_output/` | Checkpoints, written by training |
 
 ## `<organized-msa-dir>`
 
-The MSA folder. Default: `<output-dir>/organized_msas`.
+The MSA folder. The default is `<output-dir>/organized_msas`.
 
 | Path | What it is |
 |---|---|
@@ -41,7 +41,7 @@ The MSA folder. Default: `<output-dir>/organized_msas`.
 | `template_cache/` | OpenFold3's template cache |
 | `template_date_filter.tsv` | Hits and kept templates per chain |
 | `template_sequence_filter.tsv` | Hits the sequence filters dropped |
-| `template_cutoff_date.json` | The cutoff, with `--template-cutoff-date` |
+| `template_cutoff_date.json` | The cutoff, written with `--template-cutoff-date` |
 
 ## `prepare-inputs` output
 
@@ -50,4 +50,4 @@ The MSA folder. Default: `<output-dir>/organized_msas`.
 | `<id>.cif` | The prepared structure |
 | `prepare_dropped.json` | Structures left out, with reasons |
 | `ligands.json` | Each new ligand code, its SMILES and structures |
-| `prepare_inputs.json` | The release date used and which structures got it |
+| `prepare_inputs.json` | The release date used, and the structures it was applied to |

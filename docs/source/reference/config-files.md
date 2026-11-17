@@ -2,7 +2,7 @@
 
 ## Cleanup settings
 
-Pass these to `--cleanup-config` as YAML or JSON. List only what you want to change. A misspelled name is an error.
+These settings are passed to `--cleanup-config` as a YAML or JSON file. The file needs to list only the settings you want to change. A misspelled name is reported as an error.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -21,20 +21,20 @@ Three steps cannot be switched off: adding unresolved atoms, removing terminal `
 
 ## MSA sources manifest
 
-Pass this to `--msa-sources` as YAML or JSON. Each key is an MSA source name, which becomes the file name OpenFold3 reads. Each value is a folder, searched recursively, or a glob. Relative paths are read from the manifest's folder.
+The manifest is passed to `--msa-sources` as a YAML or JSON file. Each key is an MSA source name, which becomes the file name that OpenFold3 reads. Each value is a folder, which is searched recursively, or a glob. Relative paths are resolved from the manifest's folder.
 
 ```yaml
 uniref90_hits: searches/uniref90
 cfdb_uniref30: "pdb_msas/*/cfdb_uniref30.a3m"
 ```
 
-Instead of a file, `--msa-sources` also takes an MSA folder from an earlier run, which is linked rather than copied. See [Reuse MSAs from an earlier run](../how-to/user-msas.md#reuse-msas-from-an-earlier-run).
+Instead of a file, `--msa-sources` also accepts an MSA folder from an earlier run, which is linked rather than copied. See [Reuse MSAs from an earlier run](../how-to/user-msas.md#reuse-msas-from-an-earlier-run).
 
-Names are letters, digits, `_` and `-`; `colabfold_paired`, `dummy` and `templates` are not allowed. See [Use your own MSAs](../how-to/user-msas.md).
+Names may contain letters, digits, `_` and `-`. The names `colabfold_paired`, `dummy` and `templates` are not allowed. See [Use your own MSAs](../how-to/user-msas.md).
 
 ## `train.yml`
 
-`generate-train-config` writes this OpenFold3 config. Its defaults prove a dataset trains, and are not training-scale settings.
+`generate-train-config` writes this OpenFold3 config. Its defaults are intended to confirm that a dataset trains, and are not settings for a full training run.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -47,7 +47,7 @@ Names are letters, digits, `_` and `-`; `colabfold_paired`, `dummy` and `templat
 
 ### Sampling
 
-Every structure is equally likely to be drawn. Within a structure, each chain and interface is equally likely to centre the crop.
+Every structure is equally likely to be sampled. Within a structure, each chain and interface is equally likely to be the centre of the crop.
 
 | Weight | Ours | OpenFold3 default |
 |---|---|---|
@@ -57,13 +57,13 @@ Every structure is equally likely to be drawn. Within a structure, each chain an
 | `w_chain` | 1 | 0.5 |
 | `w_interface` | 0.5 | 1 |
 
-Changing these, or `cluster_size` in `dataset_cache.json`, gives up even per-structure sampling.
+If these weights, or `cluster_size` in `dataset_cache.json`, are changed, structures are no longer sampled evenly.
 
 ### Logging
 
-OpenFold3's config-driven logger is Weights & Biases. Add `--wandb-project` to `generate-train-config` to turn it on. Without it, no metrics are logged.
+OpenFold3's config-driven logger is Weights & Biases. You can turn it on with the `--wandb-project` option of `generate-train-config`. Without it, no metrics are logged.
 
-To log to CSV without Weights & Biases, run [scripts/train_with_csv_logger.py](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/blob/main/scripts/train_with_csv_logger.py) in place of `run_openfold train`.
+To log metrics to CSV without Weights & Biases, you can run [scripts/train_with_csv_logger.py](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/blob/main/scripts/train_with_csv_logger.py) in place of `run_openfold train`.
 
 ## Ligand table
 

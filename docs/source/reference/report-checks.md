@@ -4,14 +4,14 @@
 
 | Label | Meaning |
 |---|---|
-| **Processing** (red) | Not in your input. Likely a pipeline bug, so please report it |
-| **Input structures** (orange) | Already in your input. The structure is kept |
+| **Processing** (red) | Not present in your input. This is likely a pipeline bug, so please report it |
+| **Input structures** (orange) | Already present in your input. The structure is kept |
 | **Not checked** (grey) | A check could not run on this structure |
 | **Not run** (grey) | A check was skipped for the whole dataset |
 
 ## Validate checks
 
-These run in the `validate` stage. An error stops the pipeline with exit code 1, unless you pass `--allow-errors`, which drops the entry.
+These checks run in the `validate` stage. An error stops the pipeline with exit code 1. With `--allow-errors`, the failing entry is dropped instead.
 
 | Check | Area | What it confirms |
 |---|---|---|
@@ -39,7 +39,7 @@ These run in the `validate` stage. An error stops the pipeline with exit code 1,
 
 ## Report checks
 
-These run in the `report` stage. They never stop the pipeline.
+These checks run in the `report` stage, and do not stop the pipeline.
 
 | Check | What it looks at |
 |---|---|

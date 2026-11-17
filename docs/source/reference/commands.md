@@ -1,12 +1,12 @@
 # Commands and options
 
-Run each command with `pixi run <command>`. `finetune-pipeline` runs the six stage commands for you, so you only need those to rerun one stage. The [pipeline diagram](../explanation/how-it-works.md#the-three-steps) shows the order they run in and which flags skip them.
+Each command is run with `pixi run <command>`. `finetune-pipeline` runs the six stage commands in turn, so the stage commands are needed only to rerun a single stage. The [pipeline diagram](../explanation/how-it-works.md#the-three-steps) shows the order in which they run, and which options skip them.
 
-`output` is `./output`, relative to where you run the command. "Stored CCD" is `$CCD_PATH` if set, else the path `setup-finetuning` stored. Pass `--ccd-path` to use another CCD file for one run.
+In the tables below, `output` means `./output`, relative to the directory where the command is run. "Stored CCD" means `$CCD_PATH` if it is set, and otherwise the path stored by `setup-finetuning`. You can use a different CCD file for a single run with `--ccd-path`.
 
 ## `setup-finetuning`
 
-Run once after installing. Downloads OpenFold3's CCD into the OpenFold3 cache directory (`$OPENFOLD_CACHE`, else `~/.openfold3`) and stores its path there, in `ccd_path`.
+Download OpenFold3's CCD into the OpenFold3 cache directory (`$OPENFOLD_CACHE`, else `~/.openfold3`) and store its path there, in `ccd_path`. This needs to be run only once, after installation.
 
 | Option | Default | What it does |
 |---|---|---|
@@ -49,7 +49,7 @@ Run every stage over a directory of mmCIFs.
 
 ## `prepare-inputs`
 
-Turn `.pdb` files and a ligand table into mmCIFs. Run it first, only if you need it.
+Convert `.pdb` files and a ligand table into mmCIFs. This command is needed only for such inputs, and is run before `finetune-pipeline`.
 
 | Option | Default | What it does |
 |---|---|---|
