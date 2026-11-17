@@ -3,10 +3,9 @@
 OF3's LoggingConfig has no CSVLogger option (only wandb), so this subclasses
 TrainingExperimentRunner to add one; otherwise it mirrors run_openfold's `train`.
 Metrics land at {experiment_settings.output_dir}/csv_logs/version_*/metrics.csv.
-Needs openfold-3's CUDA pixi env:
+Run from this repository, whose pixi env installs OpenFold3:
 
-  pixi run -e openfold3-cuda12 --manifest-path <path-to-openfold-3>/pixi.toml \
-      python scripts/train_with_csv_logger.py --runner-yaml=<path-to-train.yml>
+  pixi run python scripts/train_with_csv_logger.py --runner-yaml=<path-to-train.yml>
 """
 
 from __future__ import annotations
