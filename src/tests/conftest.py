@@ -1,10 +1,12 @@
 """Shared test fixtures for the atomworks-OF3 finetune pipeline tests."""
 
+import os
 from pathlib import Path
 
 import pytest
 
 from aw_of3_finetune.openfold_cache import resolve_ccd_path
+from environ import restored_environ
 from validate_helpers import build_dataset
 
 # CIFs live in the pipeline repo so tests don't depend on the openfold-3 clone.
@@ -81,10 +83,26 @@ _CCD_PATH, _CCD_SOURCE = resolve_ccd_path(None)
 
 
 @pytest.fixture(autouse=True)
-def isolate_ccd_settings(tmp_path_factory, monkeypatch):
-    """Hide the user's $CCD_PATH and stored CCD path, so commands see only what a test passes."""
-    monkeypatch.delenv("CCD_PATH", raising=False)
-    monkeypatch.setenv("OPENFOLD_CACHE", str(tmp_path_factory.mktemp("openfold_cache")))
+def _restore_environ():
+    """Undo any os.environ change a test makes, including ones by code under test.
+
+    monkeypatch already undoes its own setenv/delenv; this also covers direct writes
+    to os.environ (as openfold3's setup_openfold makes to OPENFOLD_CACHE), which would
+    otherwise reach later tests -- under pytest -n only on whichever worker ran the test.
+    """
+    with restored_environ():
+        yield
+
+
+@pytest.fixture(autouse=True)
+def isolate_ccd_settings(_restore_environ, tmp_path_factory):
+    """Hide the user's $CCD_PATH and stored CCD path, so commands see only what a test passes.
+
+    Changes only this test's copy of os.environ: _restore_environ puts both variables
+    back afterwards.
+    """
+    os.environ.pop("CCD_PATH", None)
+    os.environ["OPENFOLD_CACHE"] = str(tmp_path_factory.mktemp("openfold_cache"))
 
 
 @pytest.fixture(scope="session")
