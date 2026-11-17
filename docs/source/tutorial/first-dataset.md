@@ -104,7 +104,7 @@ This set has no **Dropped** section. On your own data, that section lists any st
 
 ## 7. Train for one step (optional)
 
-This needs a GPU. OpenFold3 is installed in this repository's pixi environment, so run training from here. `train.yml` runs one short training step, to prove the dataset trains.
+This needs a GPU. OpenFold3 is installed in this repository's pixi environment, so we can run training from here. `train.yml` runs one short training step, to prove the dataset trains.
 
 ```bash
 pixi run run_openfold train --runner-yaml=output/tutorial/train.yml
