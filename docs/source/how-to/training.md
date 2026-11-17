@@ -22,7 +22,7 @@ The download is not needed if you start from your own weights with `--init-check
 
 ## 2. Run training
 
-OpenFold3 is installed in this repository's pixi environment, so training can be run from here. Training requires a GPU.
+OpenFold3 is installed in this repository's pixi environment, so training can be run from here. Training requires a GPU. The following command trains with the `train.yml` written earlier by `generate-train-config` or `finetune-pipeline`, which is in the output directory, `./output` by default:
 
 ```bash
 pixi run run_openfold train --runner-yaml=output/train.yml
@@ -32,7 +32,16 @@ The default `train.yml` runs a single short step, which confirms that the datase
 
 ## Choose the starting weights
 
-By default, training fine-tunes OpenFold3's pretrained weights, downloaded in step 1 above. You can choose different starting weights with either of the following options, on `generate-train-config` or `finetune-pipeline`.
+By default, training fine-tunes OpenFold3's pretrained weights, downloaded in step 1 above. You can choose different starting weights when you write `train.yml`. For example, the following command writes `output/train.yml` so that training starts from the weights in `my_weights.ckpt`:
+
+```bash
+pixi run generate-train-config \
+  --output-dir output \
+  --organized-msa-dir output/organized_msas \
+  --init-checkpoint /path/to/my_weights.ckpt
+```
+
+The starting weights are chosen with the following options, which are available on both `generate-train-config` and `finetune-pipeline`:
 
 | Option | Training starts from |
 |---|---|
@@ -100,4 +109,4 @@ pixi run python scripts/train_with_csv_logger.py --runner-yaml=output/train.yml
 
 ## Use OpenFold3's faster kernels
 
-`train.yml` turns off OpenFold3's DeepSpeed and cuEquivariance kernels, because this environment does not install them. To use them, you can run the same command in the `openfold3-cuda12` environment of an [`openfold-3`](https://github.com/aqlaboratory/openfold-3) checkout, with `pixi run -e openfold3-cuda12 --manifest-path ../openfold-3/pixi.toml`.
+`train.yml` turns off OpenFold3's DeepSpeed and cuEquivariance kernels, because this environment does not install them. To install and use the kernels, see [Installation with kernels](https://openfold-3.readthedocs.io/en/latest/Installation.html#installation-with-kernels) in the OpenFold3 documentation.
