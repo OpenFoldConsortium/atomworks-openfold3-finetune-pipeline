@@ -21,7 +21,7 @@ PRIVATE_PATTERNS = (
     "baker-laboratory",
 )
 FLAG = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]+")
-NOT_OUR_FLAGS = {"--manifest-path", "--runner-yaml"}  # pixi's and run_openfold's
+NOT_OUR_FLAGS = {"--manifest-path", "--runner-yaml", "--non-interactive"}  # pixi's, run_openfold's, setup_openfold's
 TUTORIAL_IDS = {"1a3n", "1fdl", "1ubq", "2crb", "2q2k", "3u8v", "4x1f", "7riv"}
 
 
