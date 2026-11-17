@@ -2,6 +2,22 @@
 
 `generate-train-config` writes the OpenFold3 training config, `<output-dir>/train.yml`, and `finetune-pipeline` writes it as one of its stages. This page describes which weights training starts from, where checkpoints are written, how to resume a run, and how to log metrics.
 
+## 1. Download OpenFold3's weights first
+
+By default, `train.yml` starts from OpenFold3's pretrained weights, so the weights must be downloaded **before** you run `generate-train-config` or `finetune-pipeline`. Both commands write the path of the weights into `train.yml`, and stop with an error if the file is not there yet. The weights, about 2.3 GB, are downloaded with OpenFold3's setup command, which needs to be run only once:
+
+```bash
+pixi run setup_openfold
+```
+
+`setup_openfold` saves the weights to the OpenFold3 cache directory, which is `$OPENFOLD_CACHE` if set, and `~/.openfold3` otherwise. The pipeline looks for the weights in the same directory, so if you set `$OPENFOLD_CACHE` during setup, it must also be set when you build the dataset. The file name of the default weights is taken from OpenFold3 itself.
+
+If the weights are missing, `generate-train-config` stops with an error that gives the path it checked. `finetune-pipeline` checks for the weights before its first stage, so a missing file is reported before any time is spent on MSAs.
+
+The download is not needed if you start from your own weights with `--init-checkpoint`, or from random weights with `--from-scratch` (see [Choose the starting weights](#choose-the-starting-weights)).
+
+## 2. Run training
+
 OpenFold3 is installed in this repository's pixi environment, so training can be run from here. Training requires a GPU.
 
 ```bash
@@ -12,7 +28,7 @@ The default `train.yml` runs a single short step, which confirms that the datase
 
 ## Choose the starting weights
 
-By default, training fine-tunes OpenFold3's pretrained weights. You can choose different starting weights with either of the following options, on `generate-train-config` or `finetune-pipeline`.
+By default, training fine-tunes OpenFold3's pretrained weights, downloaded in step 1 above. You can choose different starting weights with either of the following options, on `generate-train-config` or `finetune-pipeline`.
 
 | Option | Training starts from |
 |---|---|
@@ -28,16 +44,6 @@ experiment_settings:
   ckpt_load_settings:
     manual_checkpoint_loading: true
 ```
-
-### Download the default weights
-
-The pipeline takes the file name of the default weights from OpenFold3 itself, and looks for the file in the OpenFold3 cache directory. This directory is `$OPENFOLD_CACHE` if set, and `~/.openfold3` otherwise. The weights, about 2.3 GB, can be downloaded with OpenFold3's setup command:
-
-```bash
-pixi run setup_openfold
-```
-
-If the weights are missing, `generate-train-config` stops with an error that gives the path it checked. `finetune-pipeline` checks for the weights before its first stage, so a missing file is reported before any time is spent on MSAs.
 
 ## Find the checkpoints
 
