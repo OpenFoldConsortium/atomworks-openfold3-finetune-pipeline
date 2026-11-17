@@ -1,14 +1,14 @@
 # atomworks-openfold3-finetune-pipeline
 
-Turn a directory of structures into an OpenFold3 training dataset, using AtomWorks. You get cleaned structures, MSAs, templates, a `train.yml` and a validation report.
+This pipeline turns a directory of structures into an OpenFold3 training dataset, using AtomWorks. It produces cleaned structures, MSAs, templates, a training config (`train.yml`) and a validation report.
 
-It is for structural biology groups who want to fine-tune OpenFold3 on their own structures.
+It is intended for structural biology groups who want to fine-tune OpenFold3 on their own structures.
 
 ## Quick start
 
 ### 1. Install
 
-Clone this repository, then install with [pixi](https://pixi.sh).
+Clone this repository, then install it with [pixi](https://pixi.sh).
 
 ```bash
 git clone https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline.git
@@ -18,25 +18,25 @@ pixi install
 
 ### 2. Set up the CCD
 
-The pipeline uses the Chemical Component Dictionary (CCD) to identify residues and ligands, and many of the tests need it too. It is not bundled. Run this once to download OpenFold3's copy (430 MB) and store its path:
+The pipeline uses the Chemical Component Dictionary (CCD) to identify residues and ligands, and many of the tests also require it. The CCD is not bundled with the pipeline. The following command downloads OpenFold3's copy (430 MB) and stores its path, and needs to be run only once:
 
 ```bash
 pixi run setup-finetuning
 ```
 
-It downloads the CCD to OpenFold3's cache directory, `~/.openfold3`, and stores its path there in `ccd_path`. After that, every command finds the CCD on its own. OpenFold3's copy is used rather than wwPDB's latest, whose ligand charges have changed.
+The CCD is downloaded to OpenFold3's cache directory, `~/.openfold3`, and its path is stored there in `ccd_path`. Every command then finds the CCD without further setup. The pipeline uses OpenFold3's copy rather than the latest wwPDB release, in which some ligand charges have changed.
 
-- **Already have the CCD?** Run `pixi run setup-finetuning --ccd-path <your-ccd.cif>` to store its path instead of downloading it again.
-- **Using another cache directory?** OpenFold3 reads `$OPENFOLD_CACHE` in place of `~/.openfold3`. If you set it when you run setup, set it to the same directory in every shell where you build datasets or train. Otherwise the pipeline and OpenFold3 look in `~/.openfold3` and do not find the CCD or the weights.
-- **Another CCD for one run?** Pass `--ccd-path`, or set `$CCD_PATH`. Either one overrides the stored path.
+- **If you already have the CCD,** you can store its path instead of downloading it again, with `pixi run setup-finetuning --ccd-path <your-ccd.cif>`.
+- **If you use another cache directory,** OpenFold3 reads `$OPENFOLD_CACHE` in place of `~/.openfold3`. If it is set during setup, it must be set to the same directory in every shell where you build datasets or train. Otherwise, the pipeline and OpenFold3 look in `~/.openfold3` and do not find the CCD or the model weights.
+- **To use a different CCD for a single run,** you can specify it with `--ccd-path` or `$CCD_PATH`. Either one overrides the stored path.
 
-Then run the tests, which are in `src/tests`. Tests that need the CCD are skipped if it is not set up.
+You can then run the tests, which are in `src/tests`. Tests that require the CCD are skipped if it is not set up.
 
 ```bash
 pixi run test
 ```
 
-`pixi run test-integration` runs the slower end-to-end tests.
+The slower end-to-end tests can be run with `pixi run test-integration`.
 
 ### 3. Download OpenFold3's weights
 
@@ -50,7 +50,7 @@ pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
 
 ### 4. Build a dataset
 
-Run the pipeline on the two bundled structures in [examples/quickstart](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/tree/main/examples/quickstart): `1stp.cif` (streptavidin with biotin) and `1ubq.cif` (ubiquitin).
+The following command runs the pipeline on the two structures in [examples/quickstart](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/tree/main/examples/quickstart): `1stp.cif` (streptavidin with biotin) and `1ubq.cif` (ubiquitin).
 
 ```bash
 pixi run finetune-pipeline \
@@ -59,17 +59,17 @@ pixi run finetune-pipeline \
   --name quickstart
 ```
 
-It writes everything to `./output`. Pass `--output-dir` to write somewhere else.
+The default output directory is `./output`. You can specify a different output directory with `--output-dir`.
 
-Most of the run is waiting on the public ColabFold server for MSAs.
+Most of the run time is spent waiting for MSAs from the public ColabFold server.
 
 ### 5. Check the result
 
-Open `output/report/index.html`. It says what is unusual about your structures and whether processing introduced any issues.
+The report, `output/report/index.html`, describes anything unusual about your structures and whether processing introduced any issues.
 
 ## Do you need `prepare-inputs`?
 
-Most users do not. `finetune-pipeline` works directly on mmCIF files from the PDB or similar sources.
+Most users do not need it. `finetune-pipeline` works directly on mmCIF files from the PDB or similar sources.
 
 | Your input | What to run |
 |---|---|
@@ -77,7 +77,7 @@ Most users do not. `finetune-pipeline` works directly on mmCIF files from the PD
 | `.pdb` files | `prepare-inputs`, then `finetune-pipeline` |
 | Ligands under a placeholder name such as `LIG` | `prepare-inputs`, then `finetune-pipeline` |
 
-`prepare-inputs` is a separate command, and `finetune-pipeline` never runs it. See [Prepare a dataset from PDB files](how-to/pdb-datasets.md).
+`prepare-inputs` is a separate command, and `finetune-pipeline` does not run it. For details, see [Prepare a dataset from PDB files](how-to/pdb-datasets.md).
 
 ## Where to go next
 

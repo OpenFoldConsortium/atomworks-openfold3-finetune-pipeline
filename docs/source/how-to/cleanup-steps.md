@@ -1,10 +1,10 @@
 # Switch cleanup steps off
 
-By default the pipeline cleans structures the way OpenFold3 cleans its own training data. This guide shows how to keep something a cleanup step would remove, such as crystal waters or a short peptide.
+By default, the pipeline cleans structures in the same way that OpenFold3 cleans its own training data. This guide describes how to keep something that a cleanup step would otherwise remove, such as crystal waters or a short peptide.
 
 ## 1. Write a settings file
 
-List only the steps you want off. Unlisted steps keep their defaults.
+The settings file lists only the steps you want to switch off. Steps that are not listed keep their defaults.
 
 ```yaml
 # cleanup.yml
@@ -12,11 +12,11 @@ remove_waters: false
 remove_clashing_chains: false
 ```
 
-[examples/cleanup_settings.yml](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/blob/main/examples/cleanup_settings.yml) lists every switch with what it does. A misspelled step name is an error.
+[examples/cleanup_settings.yml](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/blob/main/examples/cleanup_settings.yml) lists every setting and what it does. A misspelled step name is reported as an error.
 
 ## 2. Run the pipeline with it
 
-Pass the file with `--cleanup-config`. It works on `finetune-pipeline` and `finetune-prep`.
+You can pass the settings file to `finetune-pipeline` or `finetune-prep` with `--cleanup-config`.
 
 ```bash
 pixi run finetune-pipeline \
@@ -28,11 +28,11 @@ pixi run finetune-pipeline \
 
 ## 3. Check what was used
 
-The run prints the settings that differ from OpenFold3's. Every dataset also records its settings in `<output-dir>/cleanup_settings.json`.
+The run prints the settings that differ from OpenFold3's defaults. Each dataset also records its settings in `<output-dir>/cleanup_settings.json`.
 
 ## Steps you cannot switch off
 
-The model depends on these three:
+The model depends on the following three steps, which are always applied:
 
 - Adding unresolved atoms.
 - Removing terminal `OXT` and `OP3` atoms.

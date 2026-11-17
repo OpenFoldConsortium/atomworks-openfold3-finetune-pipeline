@@ -1,10 +1,10 @@
 # Use a fixed template cutoff
 
-By default, a template must be at least 60 days older than the structure it serves. Old structures can lose every template to this rule. A fixed cutoff gives every structure the same date instead.
+By default, a template must have been released at least 60 days before the structure it is used for. Under this rule, older structures can lose all of their templates. A fixed cutoff applies the same date to every structure instead.
 
 ## 1. Run with a cutoff
 
-Pass `--template-cutoff-date` to `finetune-pipeline`. Templates released before that date are kept, whatever each structure's own date.
+You can set a fixed cutoff with the `--template-cutoff-date` option of `finetune-pipeline`. Templates released before that date are kept, regardless of each structure's own release date.
 
 ```bash
 pixi run finetune-pipeline \
@@ -17,10 +17,10 @@ pixi run finetune-pipeline \
 
 ## 2. Check the report
 
-The report shows the cutoff as a note. It is also recorded in `<organized-msa-dir>/of3_template_data/template_cutoff_date.json`.
+The report shows the cutoff as a note. The cutoff is also recorded in `<organized-msa-dir>/of3_template_data/template_cutoff_date.json`.
 
 ## Before you use it
 
-- **Templates can be close homologs.** The model may see structures a real prediction would not have. This is usually fine when fine-tuning on your own targets, which is why it is an option and not the default.
-- **The sequence filters must stay on.** They keep a structure from being its own template, so the option cannot be combined with `--no-sequence-filter`.
-- **It replaces `--max-release-date`.** Give one or the other.
+- **Templates can be close homologs.** The model may see structures that would not be available for a real prediction. This is usually acceptable when fine-tuning on your own targets, which is why the cutoff is an option rather than the default.
+- **The sequence filters must remain on.** They prevent a structure from being its own template, so this option cannot be combined with `--no-sequence-filter`.
+- **It replaces `--max-release-date`.** Only one of the two can be given.

@@ -1,12 +1,12 @@
 # atomworks-openfold3-finetune-pipeline
 
-Turn a directory of structures into an OpenFold3 training dataset, using AtomWorks. You get cleaned structures, MSAs, templates, a `train.yml` and a validation report.
+This pipeline turns a directory of structures into an OpenFold3 training dataset, using AtomWorks. It produces cleaned structures, MSAs, templates, a training config (`train.yml`) and a validation report.
 
-Check out the full documentation at https://atomworks-openfold3-finetune-pipeline.readthedocs.io/en/latest/
+The full documentation is available at https://atomworks-openfold3-finetune-pipeline.readthedocs.io/en/latest/
 
 ## Install
 
-Clone this repository, then install with [pixi](https://pixi.sh).
+Clone this repository, then install it with [pixi](https://pixi.sh).
 
 ```bash
 git clone https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline.git
@@ -16,25 +16,25 @@ pixi install
 
 ## Set up the CCD
 
-The pipeline uses the Chemical Component Dictionary (CCD) to identify residues and ligands, and many of the tests need it too. It is not bundled. Run this once to download OpenFold3's copy (430 MB) and store its path:
+The pipeline uses the Chemical Component Dictionary (CCD) to identify residues and ligands, and many of the tests also require it. The CCD is not bundled with the pipeline. The following command downloads OpenFold3's copy (430 MB) and stores its path, and needs to be run only once:
 
 ```bash
 pixi run setup-finetuning
 ```
 
-It downloads the CCD to OpenFold3's cache directory, `~/.openfold3`, and stores its path there in `ccd_path`. After that, every command finds the CCD on its own. OpenFold3's copy is used rather than wwPDB's latest, whose ligand charges have changed.
+The CCD is downloaded to OpenFold3's cache directory, `~/.openfold3`, and its path is stored there in `ccd_path`. Every command then finds the CCD without further setup. The pipeline uses OpenFold3's copy rather than the latest wwPDB release, in which some ligand charges have changed.
 
-- **Already have the CCD?** Run `pixi run setup-finetuning --ccd-path <your-ccd.cif>` to store its path instead of downloading it again.
-- **Using another cache directory?** OpenFold3 reads `$OPENFOLD_CACHE` in place of `~/.openfold3`. If you set it when you run setup, set it to the same directory in every shell where you build datasets or train. Otherwise the pipeline and OpenFold3 look in `~/.openfold3` and do not find the CCD or the weights.
-- **Another CCD for one run?** Pass `--ccd-path`, or set `$CCD_PATH`. Either one overrides the stored path.
+- **If you already have the CCD,** you can store its path instead of downloading it again, with `pixi run setup-finetuning --ccd-path <your-ccd.cif>`.
+- **If you use another cache directory,** OpenFold3 reads `$OPENFOLD_CACHE` in place of `~/.openfold3`. If it is set during setup, it must be set to the same directory in every shell where you build datasets or train. Otherwise, the pipeline and OpenFold3 look in `~/.openfold3` and do not find the CCD or the model weights.
+- **To use a different CCD for a single run,** you can specify it with `--ccd-path` or `$CCD_PATH`. Either one overrides the stored path.
 
-Then run the tests, which are in `src/tests`. Tests that need the CCD are skipped if it is not set up.
+You can then run the tests, which are in `src/tests`. Tests that require the CCD are skipped if it is not set up.
 
 ```bash
 pixi run test
 ```
 
-`pixi run test-integration` runs the slower end-to-end tests.
+The slower end-to-end tests can be run with `pixi run test-integration`.
 
 ## Download OpenFold3's weights
 
@@ -59,7 +59,7 @@ pixi run finetune-pipeline \
 
 The default output directory is `./output`. You can specify a different output directory with `--output-dir`.
 
-View a report of the processed examples with  
+You can view a report on the processed examples with:
 
 ```bash
 open output/report/index.html
@@ -71,7 +71,7 @@ open output/report/index.html
 - [Tutorial: your first dataset](docs/source/tutorial/first-dataset.md)
 - [Known limitations](docs/source/reference/known-limitations.md)
 
-Build the site with `pixi run -e docs docs`.
+The documentation site can be built with `pixi run -e docs docs`.
 
 ## Licence
 
