@@ -6,8 +6,7 @@ By the end you will know what the pipeline produces and how to tell whether a da
 
 **What you need**
 
-- This repository, installed (see [Quick start](../index.md#quick-start)).
-- The Chemical Component Dictionary (CCD), about 430 MB to download. Step 2 fetches it.
+- This repository, installed, with the CCD set up (see [Quick start](../index.md#quick-start), steps 1 and 2).
 - About 10 minutes. The MSAs are precomputed, so you do not wait on the ColabFold server.
 - About 1 GB of disk, plus 6.3 GB for the optional training checkpoint.
 - A GPU only for the optional training section.
@@ -22,18 +21,7 @@ ls examples/tutorial/*.cif
 
 The set mixes monomers, complexes, ligands and DNA, so you see several kinds of output. 4x1f also has a known issue in its deposited ligand, which you will inspect in the report.
 
-## 2. Get the CCD
-
-The pipeline uses the CCD to identify residues and ligands. Download OpenFold3's copy, then set its path for this shell.
-
-```bash
-curl -O https://openfold3-data.s3.amazonaws.com/chemical_component_dictionary.cif
-export CCD_PATH=$PWD/chemical_component_dictionary.cif
-```
-
-Every command below uses this variable.
-
-## 3. Get the precomputed MSAs
+## 2. Get the precomputed MSAs
 
 Download the archive, about 120 MB, and check it. Unpacking gives `output/msas/`.
 
@@ -46,7 +34,7 @@ tar -xzf tutorial-msas.tar.gz -C output
 
 If the download fails or the check does not say `OK`, see [Use live MSAs instead](#use-live-msas-instead).
 
-## 4. Build the dataset
+## 3. Build the dataset
 
 Run the pipeline. `--skip-existing` reuses the MSAs you just unpacked.
 
@@ -55,7 +43,6 @@ pixi run finetune-pipeline \
   --cif-dir examples/tutorial \
   --output-dir output/tutorial \
   --organized-msa-dir output/msas \
-  --ccd-path $CCD_PATH \
   --name tutorial \
   --skip-existing
 ```
@@ -66,7 +53,7 @@ This takes under a minute. It runs ten stages, and the validate stage should pri
 entries: 8 in → 8 out
 ```
 
-## 5. Look at what it made
+## 4. Look at what it made
 
 Everything is in `output/tutorial/`.
 
@@ -84,7 +71,7 @@ Open `dataset_cache.json` and find `7riv`. Its protein chain lists its MSA as `a
 
 Now find `1ubq`. It has no templates, because it was released in 1987 and by default a template must be older than the structure. To change this, see [Use a fixed template cutoff](../how-to/template-cutoff.md).
 
-## 6. Read the report
+## 5. Read the report
 
 Open `output/tutorial/report/index.html` in a browser. No server is needed.
 
@@ -102,7 +89,7 @@ This is in the deposited structure, in both copies of the ligand. The pipeline d
 
 This set has no **Dropped** section. On your own data, that section lists any structure left out, with the reason.
 
-## 7. Train for one step (optional)
+## 6. Train for one step (optional)
 
 This needs a GPU. OpenFold3 is installed in this repository's pixi environment, so we can run training from here. `train.yml` runs one short training step, to prove the dataset trains.
 
@@ -124,6 +111,6 @@ Point `--cif-dir` at your own mmCIFs and run the same command without `--skip-ex
 
 ## Use live MSAs instead
 
-If you skip step 3, the pipeline fetches MSAs from the public ColabFold server. Run step 4 with an empty `--organized-msa-dir`, and without `--skip-existing`.
+If you skip step 2, the pipeline fetches MSAs from the public ColabFold server. Run step 3 with an empty `--organized-msa-dir`, and without `--skip-existing`.
 
 This took about 7 minutes in our tests. It depends on the server's queue and can take much longer.

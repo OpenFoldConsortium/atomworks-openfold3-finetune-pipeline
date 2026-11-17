@@ -10,7 +10,6 @@ Pass `--template-cutoff-date` to `finetune-pipeline`. Templates released before 
 pixi run finetune-pipeline \
   --cif-dir <dir-of-mmcifs> \
   --output-dir <output-dir> \
-  --ccd-path $CCD_PATH \
   --organized-msa-dir <organized-msa-dir> \
   --name <dataset-name> \
   --template-cutoff-date 2030-01-01

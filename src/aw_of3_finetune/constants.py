@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 # No corpus-level clustering: every chain and interface gets this one dummy cluster id.
 # DUMMY_CLUSTER_SIZE is for tests and legacy use only; build_structure_data sets
 # cluster_size = datapoints (chains + interfaces) per structure. Safe because
@@ -42,3 +44,6 @@ MSA_INDEX_NAME = "msa_index.yml"
 OF3_ALIGNMENTS_DIRNAME = "of3_alignments"
 # Where atomworks' ColabFold client writes unpaired MSAs: the store of source colabfold_main.
 COLABFOLD_UNPAIRED_DIRNAME = "unpaired"
+
+# Pipeline output directory used when --output-dir is not passed (relative to the working directory).
+DEFAULT_OUTPUT_DIR = Path("output")

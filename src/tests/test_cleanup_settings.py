@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from assertions import write_emptiable_minimal_3aa
 from aw_of3_finetune.cleanup import CleanupSettings, clean_structure
 from aw_of3_finetune.cli import finetune_pipeline, finetune_prep
+from aw_of3_finetune.openfold_cache import write_stored_ccd_path
 from aw_of3_finetune.parsing import parse_structure
 
 STEP_FIELDS = [
@@ -168,7 +169,7 @@ class TestCli:
 
         # The settings written next to the output are the defaults.
         actual_recorded = json.loads((tmp_path / "out" / "cleanup_settings.json").read_text())
-        assert actual_recorded == CleanupSettings().model_dump()
+        assert actual_recorded == {**CleanupSettings().model_dump(), "ccd_path": None, "ccd_source": None}
 
         # Default settings trigger no "differs from OpenFold3" warning.
         assert "differ from the defaults" not in result.output
@@ -296,3 +297,32 @@ def test_finetune_prep_warns_about_highest_occupancy(cif_protein_monomer, tmp_pa
     expected_count = 1
     actual_count = result.output.count("altloc: highest_occupancy is not the recommended choice")
     assert actual_count == expected_count
+
+
+class TestRecordedCcd:
+    def test_finetune_prep_records_the_stored_ccd_and_its_source(self, cif_protein_monomer, ccd_path, tmp_path):
+        """With no --ccd-path, cleanup_settings.json names the stored CCD and the file it came from."""
+        record = write_stored_ccd_path(ccd_path)
+        cif_dir = tmp_path / "in"
+        cif_dir.mkdir()
+        (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer)
+
+        result = CliRunner().invoke(
+            finetune_prep, ["--cif-dir", str(cif_dir), "--output-dir", str(tmp_path / "out")]
+        )
+
+        assert result.exit_code == 0, result.output
+        actual_recorded = json.loads((tmp_path / "out" / "cleanup_settings.json").read_text())
+        assert actual_recorded["ccd_path"] == str(ccd_path.resolve())
+        assert actual_recorded["ccd_source"] == str(record)
+
+    def test_recorded_settings_can_be_passed_back_as_cleanup_config(self, tmp_path):
+        """The CCD keys in a recorded cleanup_settings.json are skipped when it is reused."""
+        recorded = tmp_path / "cleanup_settings.json"
+        recorded.write_text(json.dumps({
+            **CleanupSettings(remove_waters=False).model_dump(),
+            "ccd_path": "/data/components.cif",
+            "ccd_source": "--ccd-path",
+        }))
+
+        assert CleanupSettings.from_file(recorded) == CleanupSettings(remove_waters=False)

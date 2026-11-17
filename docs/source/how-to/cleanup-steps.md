@@ -22,7 +22,6 @@ Pass the file with `--cleanup-config`. It works on `finetune-pipeline` and `fine
 pixi run finetune-pipeline \
   --cif-dir <dir-of-mmcifs> \
   --output-dir <output-dir> \
-  --ccd-path $CCD_PATH \
   --organized-msa-dir <organized-msa-dir> \
   --cleanup-config cleanup.yml
 ```

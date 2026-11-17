@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 from collections.abc import Callable
 from functools import wraps
@@ -26,6 +27,7 @@ from aw_of3_finetune.constants import (
     CLEANED_STRUCTURES_DIRNAME,
     COLABFOLD_UNPAIRED_DIRNAME,
     COMPRESSED_STRUCTURES_DIRNAME,
+    DEFAULT_OUTPUT_DIR,
     ORGANIZED_MSAS_DIRNAME,
     PREP_DROPPED_FILE,
 )
@@ -38,6 +40,17 @@ from aw_of3_finetune.msa import (
     collect_msa_queries,
 )
 from aw_of3_finetune.msa_sources import MsaSourcesError, add_to_msa_index, import_user_msas, msa_dir_kind
+from aw_of3_finetune.openfold_cache import (
+    CCD_S3_BUCKET,
+    CCD_S3_KEY,
+    CHECKPOINT_ROOT_FILENAME,
+    SETUP_HINT,
+    openfold_cache_dir,
+    read_stored_ccd_path,
+    resolve_ccd_path,
+    stored_ccd_path_file,
+    write_stored_ccd_path,
+)
 from aw_of3_finetune.prepare_inputs import (
     DEFAULT_RELEASE_DATE,
     PREPARE_DROPPED_FILE,
@@ -146,6 +159,64 @@ cleanup_config_option = click.option(
     help="YAML/JSON file switching structure-cleanup steps off (see "
     "examples/cleanup_settings.yml). Default: OpenFold3's cleanup, every step on.",
 )
+
+
+# click Context.meta key: where --ccd-path's value came from (see ccd_path_option).
+CCD_SOURCE_META_KEY = "aw_of3_finetune.ccd_source"
+
+
+def ccd_path_option(*, required: bool, help: str) -> Callable[[Callable], Callable]:
+    """Add --ccd-path, falling back to $CCD_PATH and then the path stored by setup-finetuning.
+
+    Args:
+        required: If True, the command fails when no CCD is found by any route.
+        help: Help text describing what the command uses the CCD for.
+
+    Returns:
+        A click option decorator.
+    """
+
+    def callback(ctx: click.Context, param: click.Parameter, value: Path | None) -> Path | None:
+        path, source = resolve_ccd_path(value)
+        if path is None:
+            if required:
+                raise click.BadParameter(f"no CCD found. {SETUP_HINT}", ctx=ctx, param=param)
+            return None
+        if not path.is_file():
+            raise click.BadParameter(f"CCD file {path} (from {source}) does not exist. {SETUP_HINT}",
+                                     ctx=ctx, param=param)
+        if value is None:
+            click.echo(f"Using the CCD at {path} (from {source}).", err=True)
+        # Shared with commands run through ctx.invoke, so finetune-prep can record it.
+        ctx.meta[CCD_SOURCE_META_KEY] = source
+        return path
+
+    return click.option(
+        "--ccd-path",
+        default=None,
+        type=click.Path(path_type=Path, dir_okay=False),
+        callback=callback,
+        help=f"{help} Default: $CCD_PATH if set, else the path stored by setup-finetuning.",
+    )
+
+
+def output_dir_option(*, exists: bool, help: str) -> Callable[[Callable], Callable]:
+    """Add --output-dir, the pipeline output directory, defaulting to ./output.
+
+    Args:
+        exists: Whether the directory must already exist (stages after finetune-prep).
+        help: Help text.
+
+    Returns:
+        A click option decorator.
+    """
+    return click.option(
+        "--output-dir",
+        default=DEFAULT_OUTPUT_DIR,
+        show_default=True,
+        type=click.Path(path_type=Path, exists=exists, file_okay=False),
+        help=help,
+    )
 
 
 # import-msas lists at most this many unmatched files per source.
@@ -290,10 +361,8 @@ def _check_paired_dirs_writable(
     type=click.Path(path_type=Path, exists=True, file_okay=False),
     help="Directory of input mmCIF files.",
 )
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path),
+@output_dir_option(
+    exists=False,
     help="Output directory. Augmented CIFs go to <output-dir>/cleaned_structures/, "
     "manifest to <output-dir>/manifest.json.",
 )
@@ -309,12 +378,10 @@ def _check_paired_dirs_writable(
     help="Pre-built OF3 template cache directory ({template-cache-dir}/{rep_id}.npz). "
     "Required only if you ran ColabFold/OF3 TemplatePreprocessor beforehand.",
 )
-@click.option(
-    "--ccd-path",
-    default=None,
-    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+@ccd_path_option(
+    required=False,
     help="Path to the Chemical Component Dictionary mmCIF. "
-    "When provided, reference molecule SDFs are generated under "
+    "When found, reference molecule SDFs are generated under "
     "<output-dir>/reference_mols/ and embedded in the manifest.",
 )
 @click.option(
@@ -359,7 +426,12 @@ def finetune_prep(
 
     structures_dir = output_dir / CLEANED_STRUCTURES_DIRNAME
     structures_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "cleanup_settings.json").write_text(cleanup_settings.model_dump_json(indent=2))
+    recorded = {
+        **cleanup_settings.model_dump(),
+        "ccd_path": str(ccd_path.resolve()) if ccd_path is not None else None,
+        "ccd_source": click.get_current_context().meta.get(CCD_SOURCE_META_KEY) if ccd_path is not None else None,
+    }
+    (output_dir / "cleanup_settings.json").write_text(json.dumps(recorded, indent=2))
     if not cleanup_settings.is_default():
         changed = ", ".join(f"{k}={v}" for k, v in cleanup_settings.non_default().items())
         click.echo(f"Cleanup settings differ from the defaults: {changed}")
@@ -464,12 +536,7 @@ def finetune_prep(
     help="Output directory: <stem>.cif per input plus prepare_dropped.json, ligands.json "
     "and prepare_inputs.json. Use it as --cif-dir for finetune-prep.",
 )
-@click.option(
-    "--ccd-path",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, dir_okay=False),
-    help="Path to the Chemical Component Dictionary mmCIF.",
-)
+@ccd_path_option(required=True, help="Path to the Chemical Component Dictionary mmCIF.")
 @click.option(
     "--release-date",
     default=DEFAULT_RELEASE_DATE,
@@ -538,10 +605,8 @@ def _warn_missing_msas(cif_path: Path, pdb_id: str, msa_dir: Path) -> None:
 
 
 @click.command()
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(
+    exists=True,
     help="Pipeline output directory produced by finetune-prep "
     "(must contain manifest.json and cleaned_structures/).",
 )
@@ -599,10 +664,8 @@ def materialize_dataset_cache(
 
 
 @click.command()
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(
+    exists=True,
     help="Pipeline output directory (must contain dataset_cache.json, "
     "of3_compressed_structures/, reference_mols/ -- i.e. materialize-dataset-cache and "
     "save_structures_as_npz must already have run).",
@@ -661,10 +724,8 @@ def generate_train_config(
 
 
 @click.command()
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(
+    exists=True,
     help="Pipeline output directory containing dataset_cache.json. The split is written to <output-dir>/split/.",
 )
 @click.option(
@@ -720,10 +781,8 @@ def split_dataset(ctx: click.Context, output_dir: Path, split_csv: Path, msa_dir
 
 
 @click.command()
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(
+    exists=True,
     help="Pipeline output directory produced by finetune-prep "
     "(must contain manifest.json and cleaned_structures/).",
 )
@@ -843,10 +902,8 @@ def generate_msas(
 
 
 @click.command()
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(
+    exists=True,
     help="Pipeline output directory produced by finetune-prep "
     "(must contain manifest.json and cleaned_structures/).",
 )
@@ -943,7 +1000,7 @@ def _drop_entries(output_dir: Path, cache_path: Path, failing: set[str]) -> None
 
 
 @click.command()
-@click.option("--output-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(exists=True,
               help="Pipeline output directory (dataset_cache.json, of3_compressed_structures/, ...).")
 @click.option("--cif-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
               help="Directory of the original input mmCIF files.")
@@ -1094,10 +1151,8 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     type=click.Path(path_type=Path, exists=True, file_okay=False),
     help="Directory of input mmCIF files.",
 )
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path),
+@output_dir_option(
+    exists=False,
     help="Output directory for every pipeline artifact: augmented CIFs, manifest, "
     "reference mols, dataset cache, and NPZ structure files.",
 )
@@ -1116,10 +1171,8 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     "import-msas). They are imported into --organized-msa-dir (default "
     "<output-dir>/organized_msas). ColabFold is never contacted, and the template stages are skipped.",
 )
-@click.option(
-    "--ccd-path",
+@ccd_path_option(
     required=True,
-    type=click.Path(path_type=Path, exists=True, dir_okay=False),
     help="Path to the Chemical Component Dictionary mmCIF. "
     "Required (unlike finetune-prep's own --ccd-path, which is optional there): "
     "without it, the augmented CIF never gets a chem_comp category embedded, and "
@@ -1252,6 +1305,7 @@ def finetune_pipeline(
     an MSA folder (--organized-msa-dir, or an existing <output-dir>/organized_msas); the
     template stages also need --templates and MSAs generated in this run.
     """
+    click.echo(f"Writing pipeline output to {output_dir.resolve()}", err=True)
     if msa_sources is not None:
         _refuse_colabfold_flags_with_msa_sources(ctx, templates)
     # Only an explicit --organized-msa-dir without --msa-sources contacts ColabFold.
@@ -1470,12 +1524,11 @@ def _write_report(inputs: ValidityInputs, report_dir: Path, ids: list[str] | Non
 
 
 @click.command()
-@click.option("--output-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(exists=True,
               help="Pipeline output directory (manifest.json, dataset_cache.json, cleanup_steps/, ...).")
 @click.option("--cif-dir", required=True, type=click.Path(path_type=Path, exists=True, file_okay=False),
               help="Directory of the original input mmCIF files.")
-@click.option("--ccd-path", required=True, type=click.Path(path_type=Path, exists=True, dir_okay=False),
-              help="Chemical Component Dictionary mmCIF.")
+@ccd_path_option(required=True, help="Chemical Component Dictionary mmCIF.")
 @click.option("--ids", "ids_file", default=None, type=click.Path(path_type=Path, exists=True, dir_okay=False),
               help="File with one structure id per line: report only these.")
 @click.option("--report-dir", default=None, type=click.Path(path_type=Path, file_okay=False),
@@ -1501,10 +1554,8 @@ def finetune_report(
 
 
 @click.command()
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(
+    exists=True,
     help="Pipeline output directory produced by finetune-prep (manifest.json + "
     "cleaned_structures/); only this dataset's sequences are processed.",
 )
@@ -1556,10 +1607,8 @@ def fetch_templates(
 
 
 @click.command()
-@click.option(
-    "--output-dir",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+@output_dir_option(
+    exists=True,
     help="Pipeline output directory (manifest.json, cleaned_structures/, and dataset_cache.json "
     "from materialize-dataset-cache).",
 )
@@ -1695,3 +1744,51 @@ def preprocess_templates(
             f"hit to the release-date filter: {', '.join(summary.date_filtered_chains)} "
             f"(per-chain counts: {summary.report_path})"
         )
+
+
+@click.command()
+@click.option(
+    "--ccd-path",
+    default=None,
+    type=click.Path(path_type=Path, exists=True, dir_okay=False),
+    help="Record this existing CCD mmCIF instead of downloading one.",
+)
+@click.option(
+    "--download-dir",
+    default=None,
+    type=click.Path(path_type=Path, file_okay=False),
+    help="Where to download the CCD. Default: the OpenFold3 cache directory ($OPENFOLD_CACHE, else ~/.openfold3).",
+)
+@click.option("--force", is_flag=True, default=False,
+              help="Download and record the CCD again even if a stored path already points at a file.")
+def setup_finetuning(ccd_path: Path | None, download_dir: Path | None, force: bool) -> None:
+    """One-time setup: download OpenFold3's CCD and store its path in the OpenFold3 cache directory.
+
+    Afterwards, commands that need the CCD (finetune-pipeline, prepare-inputs, finetune-report)
+    find it without --ccd-path. The path is written to $OPENFOLD_CACHE/ccd_path (default
+    ~/.openfold3/ccd_path), next to the ckpt_root file that OpenFold3's setup_openfold writes.
+    """
+    cache_dir = openfold_cache_dir()
+    stored = read_stored_ccd_path()
+    if ccd_path is None and not force and stored is not None and stored.is_file():
+        click.echo(f"A CCD is already set up: {stored} (stored in {stored_ccd_path_file()}). "
+                   "Pass --force to download it again, or --ccd-path to record another file.")
+        return
+    if ccd_path is None:
+        ccd_path = (download_dir or cache_dir).expanduser() / CCD_S3_KEY
+        if force or not ccd_path.is_file():
+            # Imported here: openfold3's S3 client is only needed for this download.
+            from openfold3.core.utils.s3 import download_s3_file
+
+            click.echo(f"Downloading OpenFold3's CCD (about 430 MB) to {ccd_path}...")
+            download_s3_file(CCD_S3_BUCKET, CCD_S3_KEY, ccd_path)
+        else:
+            click.echo(f"Using the CCD already downloaded at {ccd_path}.")
+    record = write_stored_ccd_path(ccd_path)
+    click.echo(f"Stored the CCD path in {record}.")
+    if os.environ.get("OPENFOLD_CACHE"):
+        click.echo(f"$OPENFOLD_CACHE is set to {cache_dir}: set it to the same value in each new "
+                   "shell, or the pipeline will not find this CCD.")
+    if not (cache_dir / CHECKPOINT_ROOT_FILENAME).is_file():
+        click.echo("OpenFold3's model weights are not set up in this cache directory yet; "
+                   "run `pixi run setup_openfold` to download them.")

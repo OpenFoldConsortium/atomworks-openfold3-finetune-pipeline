@@ -45,7 +45,6 @@ For `uniprot_hits` and `uniprot`, every header after the query must look like `t
 pixi run finetune-pipeline \
   --cif-dir <dir-of-mmcifs> \
   --output-dir <output-dir> \
-  --ccd-path $CCD_PATH \
   --msa-sources msa_sources.yml \
   --name <dataset-name>
 ```
@@ -78,7 +77,6 @@ To reuse MSAs from an earlier run, pass that run's MSA folder (its `--organized-
 pixi run finetune-pipeline \
   --cif-dir <dir-of-mmcifs> \
   --output-dir <new-output-dir> \
-  --ccd-path $CCD_PATH \
   --msa-sources <earlier-output-dir>/organized_msas \
   --name <dataset-name>
 ```
