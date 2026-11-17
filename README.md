@@ -48,9 +48,13 @@ pixi run finetune-pipeline \
   --name quickstart
 ```
 
-It writes everything to `./output`. Pass `--output-dir` to write somewhere else.
+The default output directory is `./output`. You can specify a different output directory with `--output-dir`.
 
-Then open `output/report/index.html`.
+View a report of the processed examples with  
+
+```bash
+open output/report/index.html
+```
 
 ## Documentation
 
