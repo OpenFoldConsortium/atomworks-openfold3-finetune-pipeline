@@ -4,13 +4,13 @@
 
 ## 1. Download OpenFold3's weights first
 
-By default, `train.yml` starts from OpenFold3's pretrained weights, so the weights must be downloaded **before** you run `generate-train-config` or `finetune-pipeline`. Both commands write the path of the weights into `train.yml`, and stop with an error if the file is not there yet. The weights, about 2.3 GB, are downloaded with OpenFold3's setup command, which needs to be run only once:
+By default, `train.yml` starts from OpenFold3's pretrained weights, so the weights must be downloaded **before** you run `generate-train-config` or `finetune-pipeline`. Both commands write the path of the weights into `train.yml`, and stop with an error if the file is not there yet. The weights, about 2.3 GB, are downloaded with OpenFold3's own setup command, which is installed in this repository's pixi environment and needs to be run only once:
 
 ```bash
 pixi run setup_openfold
 ```
 
-`setup_openfold` saves the weights to the OpenFold3 cache directory, which is `$OPENFOLD_CACHE` if set, and `~/.openfold3` otherwise. The pipeline looks for the weights in the same directory, so if you set `$OPENFOLD_CACHE` during setup, it must also be set when you build the dataset. The file name of the default weights is taken from OpenFold3 itself.
+The command asks a few questions. Pressing Enter at each one accepts the default, which downloads the default weights to `~/.openfold3`. `setup_openfold` does not read `$OPENFOLD_CACHE`: to use a different cache directory, you can enter it at the first question, and then set `$OPENFOLD_CACHE` to the same directory whenever you build a dataset, so that the pipeline finds the weights there. The file name of the default weights is taken from OpenFold3 itself.
 
 If the weights are missing, `generate-train-config` stops with an error that gives the path it checked. `finetune-pipeline` checks for the weights before its first stage, so a missing file is reported before any time is spent on MSAs.
 
