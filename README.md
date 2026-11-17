@@ -26,7 +26,6 @@ It downloads the CCD to OpenFold3's cache directory, `~/.openfold3`, and stores 
 
 - **Already have the CCD?** Run `pixi run setup-finetuning --ccd-path <your-ccd.cif>` to store its path instead of downloading it again.
 - **Using another cache directory?** OpenFold3 reads `$OPENFOLD_CACHE` in place of `~/.openfold3`. If you set it when you run setup, set it to the same directory in every shell where you build datasets or train. Otherwise the pipeline and OpenFold3 look in `~/.openfold3` and do not find the CCD or the weights.
-- **Training from OpenFold3's weights?** If you have not already, run `pixi run setup_openfold`. It is OpenFold3's own setup, and downloads the model weights into the same cache directory.
 - **Another CCD for one run?** Pass `--ccd-path`, or set `$CCD_PATH`. Either one overrides the stored path.
 
 Then run the tests, which are in `src/tests`. Tests that need the CCD are skipped if it is not set up.
@@ -36,6 +35,16 @@ pixi run test
 ```
 
 `pixi run test-integration` runs the slower end-to-end tests.
+
+## Download OpenFold3's weights
+
+The `train.yml` that the pipeline writes fine-tunes OpenFold3's pretrained weights, so the weights must be downloaded before you build a dataset. The following command runs OpenFold3's own setup, which downloads the default weights (about 2.3 GB) to `~/.openfold3`. It needs to be run only once:
+
+```bash
+pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
+```
+
+`--skip-biotite-ccd-update` leaves the copy of the CCD bundled with Biotite in this environment unchanged. To keep the weights in a different directory, or to train without them, see [Train on your dataset](docs/source/how-to/training.md).
 
 ## Run it
 

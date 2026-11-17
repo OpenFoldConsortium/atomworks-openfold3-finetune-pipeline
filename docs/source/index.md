@@ -28,7 +28,6 @@ It downloads the CCD to OpenFold3's cache directory, `~/.openfold3`, and stores 
 
 - **Already have the CCD?** Run `pixi run setup-finetuning --ccd-path <your-ccd.cif>` to store its path instead of downloading it again.
 - **Using another cache directory?** OpenFold3 reads `$OPENFOLD_CACHE` in place of `~/.openfold3`. If you set it when you run setup, set it to the same directory in every shell where you build datasets or train. Otherwise the pipeline and OpenFold3 look in `~/.openfold3` and do not find the CCD or the weights.
-- **Training from OpenFold3's weights?** If you have not already, run `pixi run setup_openfold`. It is OpenFold3's own setup, and downloads the model weights into the same cache directory.
 - **Another CCD for one run?** Pass `--ccd-path`, or set `$CCD_PATH`. Either one overrides the stored path.
 
 Then run the tests, which are in `src/tests`. Tests that need the CCD are skipped if it is not set up.
@@ -39,7 +38,17 @@ pixi run test
 
 `pixi run test-integration` runs the slower end-to-end tests.
 
-### 3. Build a dataset
+### 3. Download OpenFold3's weights
+
+The `train.yml` that the pipeline writes fine-tunes OpenFold3's pretrained weights, so the weights must be downloaded before you build a dataset. The following command runs OpenFold3's own setup, which downloads the default weights (about 2.3 GB) to `~/.openfold3`. It needs to be run only once:
+
+```bash
+pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
+```
+
+`--skip-biotite-ccd-update` leaves the copy of the CCD bundled with Biotite in this environment unchanged. To keep the weights in a different directory, or to train without them, see [Train on your dataset](how-to/training.md).
+
+### 4. Build a dataset
 
 Run the pipeline on the two bundled structures in [examples/quickstart](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/tree/main/examples/quickstart): `1stp.cif` (streptavidin with biotin) and `1ubq.cif` (ubiquitin).
 
@@ -54,7 +63,7 @@ It writes everything to `./output`. Pass `--output-dir` to write somewhere else.
 
 Most of the run is waiting on the public ColabFold server for MSAs.
 
-### 4. Check the result
+### 5. Check the result
 
 Open `output/report/index.html`. It says what is unusual about your structures and whether processing introduced any issues.
 

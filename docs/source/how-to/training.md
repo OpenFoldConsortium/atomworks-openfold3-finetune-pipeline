@@ -4,7 +4,7 @@
 
 ## 1. Download OpenFold3's weights first
 
-By default, `train.yml` starts from OpenFold3's pretrained weights, so the weights must be downloaded **before** you run `generate-train-config` or `finetune-pipeline`. Both commands write the path of the weights into `train.yml`, and stop with an error if the file is not there yet.
+By default, `train.yml` starts from OpenFold3's pretrained weights, so the weights must be downloaded **before** you run `generate-train-config` or `finetune-pipeline`. Both commands write the path of the weights into `train.yml`, and stop with an error if the file is not there yet. If you followed the [Quick start](../index.md#quick-start), the weights are already downloaded.
 
 The weights, about 2.3 GB, are downloaded with OpenFold3's own setup command, which is installed in this repository's pixi environment. We recommend the following command, which downloads the default weights to `~/.openfold3` without asking any questions, and needs to be run only once:
 

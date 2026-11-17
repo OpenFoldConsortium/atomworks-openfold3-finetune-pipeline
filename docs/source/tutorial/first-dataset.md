@@ -6,9 +6,9 @@ By the end you will know what the pipeline produces and how to tell whether a da
 
 **What you need**
 
-- This repository, installed, with the CCD set up (see [Quick start](../index.md#quick-start), steps 1 and 2).
+- This repository, installed, with the CCD and OpenFold3's weights set up (see [Quick start](../index.md#quick-start), steps 1 to 3).
 - About 10 minutes. The MSAs are precomputed, so you do not wait on the ColabFold server.
-- About 1 GB of disk, plus 8.6 GB for the optional training section: 2.3 GB of pretrained weights and a 6.3 GB checkpoint.
+- About 1 GB of disk, plus 6.3 GB for the optional training checkpoint.
 - A GPU only for the optional training section.
 
 ## 1. Look at the input
@@ -91,10 +91,9 @@ This set has no **Dropped** section. On your own data, that section lists any st
 
 ## 6. Train for one step (optional)
 
-This section requires a GPU and OpenFold3's pretrained weights, which `train.yml` fine-tunes. The first command downloads the weights, about 2.3 GB, and is needed only once. The second runs a single training step, which confirms that the dataset trains.
+This section requires a GPU. `train.yml` fine-tunes the OpenFold3 weights downloaded during setup, and the following command runs a single training step, which confirms that the dataset trains.
 
 ```bash
-pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
 pixi run run_openfold train --runner-yaml=output/tutorial/train.yml
 ```
 
