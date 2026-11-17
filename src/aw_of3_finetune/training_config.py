@@ -1,7 +1,8 @@
 """Generates an OF3 training runner-yaml (train.yml) from this pipeline's own output.
 
 Smoke-test defaults adapted from openfold-3's datasets/train_pdb_subset.yaml: a starting
-point to hand-edit for a real run. With a current ``split/`` (from split-dataset) the
+point to hand-edit for a real run. Training starts from OpenFold3's pretrained weights
+unless told otherwise (see init_checkpoint_settings). With a current ``split/`` (from split-dataset) the
 config also gets a ValidationPDBDataset section. msa_dir is required: TrainingDatasetPaths
 needs exactly one alignment path. See docs: Known limitations.
 """
@@ -16,6 +17,11 @@ from typing import Any
 import click
 import yaml
 
+from openfold3.entry_points.parameters import (
+    DEFAULT_CHECKPOINT_NAME,
+    OPENFOLD_MODEL_CHECKPOINT_REGISTRY,
+    get_default_checkpoint_dir,
+)
 from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
 
 from aw_of3_finetune.constants import COMPRESSED_STRUCTURES_DIRNAME, OF3_ALIGNMENTS_DIRNAME
@@ -69,7 +75,6 @@ _TEMPLATE_CONFIG: dict[str, Any] = {
     "experiment_settings": {
         "mode": "train",
         "seed": 42,
-        "restart_checkpoint_path": "last",
     },
     "data_module_args": {
         "batch_size": 1,
@@ -162,6 +167,64 @@ _VALIDATION_CONFIG: dict[str, Any] = {
 }
 
 
+class MissingPretrainedWeightsError(click.ClickException):
+    """OpenFold3's default pretrained weights are not in its checkpoint folder."""
+
+
+def default_init_checkpoint() -> Path:
+    """The absolute path of OpenFold3's default pretrained weights.
+
+    The file name and folder come from openfold3 itself: DEFAULT_CHECKPOINT_NAME in
+    OPENFOLD_MODEL_CHECKPOINT_REGISTRY, inside get_default_checkpoint_dir(), which honours
+    ``$OPENFOLD_CACHE`` (default ``~/.openfold3``) and its ``ckpt_root`` file.
+
+    Returns:
+        The weights file path.
+
+    Raises:
+        MissingPretrainedWeightsError: If the file does not exist.
+    """
+    file_name = OPENFOLD_MODEL_CHECKPOINT_REGISTRY[DEFAULT_CHECKPOINT_NAME].file_name
+    path = get_default_checkpoint_dir() / file_name
+    if not path.is_file():
+        raise MissingPretrainedWeightsError(
+            f"OpenFold3's pretrained weights are not at {path}. Download them with "
+            "`pixi run setup_openfold`, or pass --init-checkpoint <file> to start from other "
+            "weights, or --from-scratch to start from random weights."
+        )
+    return path.resolve()
+
+
+def init_checkpoint_settings(init_checkpoint: Path | None, from_scratch: bool) -> dict[str, Any]:
+    """The experiment_settings entries that choose the starting weights.
+
+    By default (and with init_checkpoint), only the model and EMA weights are loaded
+    (OF3's manual checkpoint loading); the optimizer, LR scheduler and step start fresh.
+    From scratch keeps restart_checkpoint_path "last": random weights on a first run,
+    Lightning's last.ckpt on a rerun.
+
+    Args:
+        init_checkpoint: Weights to start from; None means OpenFold3's default weights.
+        from_scratch: Start from random weights instead.
+
+    Returns:
+        ``restart_checkpoint_path`` and, unless from scratch, ``ckpt_load_settings``.
+
+    Raises:
+        ValueError: If both init_checkpoint and from_scratch are given.
+        MissingPretrainedWeightsError: If the default weights are needed but missing.
+    """
+    if from_scratch:
+        if init_checkpoint is not None:
+            raise ValueError("init_checkpoint and from_scratch cannot both be given.")
+        return {"restart_checkpoint_path": "last"}
+    path = default_init_checkpoint() if init_checkpoint is None else Path(init_checkpoint).resolve()
+    return {
+        "restart_checkpoint_path": str(path),
+        "ckpt_load_settings": {"manual_checkpoint_loading": True},
+    }
+
+
 class StaleSplitError(click.ClickException):
     """`split/` was made from a different dataset_cache.json (or has no source.json)."""
 
@@ -251,6 +314,8 @@ def build_train_config(
     wandb_project: str | None = None,
     wandb_entity: str | None = None,
     wandb_experiment_name: str | None = None,
+    init_checkpoint: Path | None = None,
+    from_scratch: bool = False,
 ) -> dict[str, Any]:
     """Build a runner-yaml config dict pointed at this pipeline's output.
 
@@ -266,11 +331,15 @@ def build_train_config(
             config-driven logger); needs a wandb login on the training machine.
         wandb_entity: wandb user/team; omitted if None (wandb's logged-in default).
         wandb_experiment_name: Run name; defaults to output_dir's name.
+        init_checkpoint: Weights to start fine-tuning from. Defaults to OpenFold3's
+            pretrained weights (see default_init_checkpoint).
+        from_scratch: Start from random weights instead (restart_checkpoint_path "last").
 
     Returns:
         The runner-yaml config as a dict.
 
     Raises:
+        MissingPretrainedWeightsError: If the default weights are needed but missing.
         StaleSplitError: If ``split/`` is out of date with dataset_cache.json.
         EmptyTrainSplitError: If the split left no training structures.
     """
@@ -278,6 +347,7 @@ def build_train_config(
     if training_output_dir is None:
         training_output_dir = output_dir / "training_output"
     config["experiment_settings"]["output_dir"] = str(training_output_dir)
+    config["experiment_settings"] |= init_checkpoint_settings(init_checkpoint, from_scratch)
 
     if wandb_project is not None:
         wandb_config: dict[str, str] = {"project": wandb_project}
@@ -346,7 +416,7 @@ def write_train_config(
         output_dir: finetune-prep/materialize-dataset-cache output directory.
         msa_dir: The --organized-msa-dir passed to generate-msas/materialize-dataset-cache.
         config_path: Where to write; defaults to ``{output_dir}/train.yml``.
-        **build_kwargs: Passed to build_train_config (wandb_* etc.).
+        **build_kwargs: Passed to build_train_config (wandb_*, init_checkpoint, from_scratch).
 
     Returns:
         The path written.

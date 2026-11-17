@@ -73,7 +73,7 @@ Most users do not. `finetune-pipeline` works directly on mmCIF files from the PD
 ## Where to go next
 
 - **Learn the pipeline:** [Your first dataset](tutorial/first-dataset.md).
-- **Do a specific job:** [Switch cleanup steps off](how-to/cleanup-steps.md), [prepare a dataset from PDB files](how-to/pdb-datasets.md), or [use your own MSAs](how-to/user-msas.md).
+- **Do a specific job:** [Switch cleanup steps off](how-to/cleanup-steps.md), [prepare a dataset from PDB files](how-to/pdb-datasets.md), [use your own MSAs](how-to/user-msas.md), or [train on your dataset](how-to/training.md).
 - **Look something up:** [Known limitations](reference/known-limitations.md).
 - **Understand a decision:** [Why these design decisions](explanation/design-decisions.md).
 
@@ -93,6 +93,7 @@ how-to/pdb-datasets
 how-to/validation-split
 how-to/template-cutoff
 how-to/user-msas
+how-to/training
 ```
 
 ```{toctree}

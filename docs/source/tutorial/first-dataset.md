@@ -8,7 +8,7 @@ By the end you will know what the pipeline produces and how to tell whether a da
 
 - This repository, installed, with the CCD set up (see [Quick start](../index.md#quick-start), steps 1 and 2).
 - About 10 minutes. The MSAs are precomputed, so you do not wait on the ColabFold server.
-- About 1 GB of disk, plus 6.3 GB for the optional training checkpoint.
+- About 1 GB of disk, plus 8.6 GB for the optional training section: 2.3 GB of pretrained weights and a 6.3 GB checkpoint.
 - A GPU only for the optional training section.
 
 ## 1. Look at the input
@@ -91,15 +91,14 @@ This set has no **Dropped** section. On your own data, that section lists any st
 
 ## 6. Train for one step (optional)
 
-This needs a GPU. OpenFold3 is installed in this repository's pixi environment, so we can run training from here. `train.yml` runs one short training step, to prove the dataset trains.
+This needs a GPU and OpenFold3's pretrained weights, which `train.yml` fine-tunes. Download the weights once, about 2.3 GB, then run one training step to prove the dataset trains.
 
 ```bash
+pixi run setup_openfold
 pixi run run_openfold train --runner-yaml=output/tutorial/train.yml
 ```
 
-`train.yml` turns off OpenFold3's DeepSpeed and cuEquivariance kernels, which this environment does not install. To turn them on, run the same command in the `openfold3-cuda12` environment of an [`openfold-3`](https://github.com/aqlaboratory/openfold-3) checkout, with `pixi run -e openfold3-cuda12 --manifest-path ../openfold-3/pixi.toml`.
-
-It writes a 6.3 GB checkpoint to `output/tutorial/training_output/checkpoints/last.ckpt`. For a real run, raise `epoch_len` and `max_epochs` in `train.yml`.
+It writes a 6.3 GB checkpoint to `output/tutorial/training_output/checkpoints/last.ckpt`. To choose other starting weights, resume a run or log metrics, see [Train on your dataset](../how-to/training.md).
 
 ## Next steps
 
@@ -108,6 +107,7 @@ Point `--cif-dir` at your own mmCIFs and run the same command without `--skip-ex
 - Have `.pdb` files or ligands named `LIG`? See [Prepare a dataset from PDB files](../how-to/pdb-datasets.md).
 - Want to hold out structures? See [Add a validation split](../how-to/validation-split.md).
 - Want to keep waters or short peptides? See [Switch cleanup steps off](../how-to/cleanup-steps.md).
+- Ready to train for real? See [Train on your dataset](../how-to/training.md).
 
 ## Use live MSAs instead
 

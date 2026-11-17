@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
+from openfold3.entry_points.parameters import DEFAULT_CHECKPOINT_NAME, OPENFOLD_MODEL_CHECKPOINT_REGISTRY
 
 from aw_of3_finetune.openfold_cache import resolve_ccd_path
 from environ import restored_environ
@@ -78,6 +79,8 @@ def cif_pxr() -> Path:
     return CIF_PXR
 
 
+DEFAULT_WEIGHTS_FILE_NAME = OPENFOLD_MODEL_CHECKPOINT_REGISTRY[DEFAULT_CHECKPOINT_NAME].file_name
+
 # Resolved once at import, before isolate_ccd_settings hides $CCD_PATH and the stored path.
 _CCD_PATH, _CCD_SOURCE = resolve_ccd_path(None)
 
@@ -98,11 +101,21 @@ def _restore_environ():
 def isolate_ccd_settings(_restore_environ, tmp_path_factory):
     """Hide the user's $CCD_PATH and stored CCD path, so commands see only what a test passes.
 
+    The fresh $OPENFOLD_CACHE holds an empty file named like OpenFold3's default weights,
+    which generate-train-config needs, so tests never read ~/.openfold3 or the real file.
     Changes only this test's copy of os.environ: _restore_environ puts both variables
     back afterwards.
     """
     os.environ.pop("CCD_PATH", None)
-    os.environ["OPENFOLD_CACHE"] = str(tmp_path_factory.mktemp("openfold_cache"))
+    cache = tmp_path_factory.mktemp("openfold_cache")
+    (cache / DEFAULT_WEIGHTS_FILE_NAME).touch()
+    os.environ["OPENFOLD_CACHE"] = str(cache)
+
+
+@pytest.fixture
+def fake_pretrained_weights(isolate_ccd_settings) -> Path:
+    """The empty stand-in for OpenFold3's default weights in this test's $OPENFOLD_CACHE."""
+    return Path(os.environ["OPENFOLD_CACHE"]) / DEFAULT_WEIGHTS_FILE_NAME
 
 
 @pytest.fixture(scope="session")

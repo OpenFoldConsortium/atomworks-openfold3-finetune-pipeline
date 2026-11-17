@@ -1135,6 +1135,41 @@ class TestFinetunePipeline:
         assert second.exit_code == 0, second.output
         assert split_paths(output_dir).val_cache.exists()
 
+    def test_init_checkpoint_passes_through_to_train_config(
+        self, cif_protein_monomer, cif_protein_only, ccd_path, tmp_path
+    ):
+        """--init-checkpoint reaches generate-train-config. An existing (empty)
+        <output-dir>/organized_msas makes the train-config stage run without ColabFold."""
+        cif_dir = self._inputs(tmp_path, cif_protein_monomer, cif_protein_only)
+        output_dir = tmp_path / "out"
+        (output_dir / "organized_msas").mkdir(parents=True)
+        weights = tmp_path / "my_weights.ckpt"
+        weights.touch()
+
+        result = self._run(
+            cif_dir, output_dir, ccd_path, "--init-checkpoint", str(weights), "--skip-validation", "--skip-report"
+        )
+
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        assert config["experiment_settings"]["restart_checkpoint_path"] == str(weights.resolve())
+
+    def test_missing_pretrained_weights_fails_before_stage_1(
+        self, cif_protein_monomer, cif_protein_only, ccd_path, tmp_path, monkeypatch
+    ):
+        """With an MSA folder (so a train.yml will be written) but no default weights,
+        the run stops before any stage, not after the ColabFold wait."""
+        monkeypatch.setenv("OPENFOLD_CACHE", str(tmp_path / "empty_cache"))
+        cif_dir = self._inputs(tmp_path, cif_protein_monomer, cif_protein_only)
+        output_dir = tmp_path / "out"
+        (output_dir / "organized_msas").mkdir(parents=True)
+
+        result = self._run(cif_dir, output_dir, ccd_path)
+
+        assert result.exit_code == 1
+        assert "pixi run setup_openfold" in result.output
+        assert "Stage 1/10" not in result.output
+
 
 class TestGenerateTrainConfig:
     def _make_pipeline_output(self, cif_protein_monomer, ccd_path, tmp_path) -> Path:
@@ -1214,6 +1249,86 @@ class TestGenerateTrainConfig:
 
         # The whole config validates against OF3's schema (must not raise).
         TrainingExperimentConfig(**config)
+
+    def _generate(self, cif_protein_monomer, ccd_path, tmp_path, *extra_args):
+        """Run generate-train-config on a fresh pipeline output; return (result, output_dir)."""
+        output_dir = self._make_pipeline_output(cif_protein_monomer, ccd_path, tmp_path)
+        msa_dir = self._make_msa_dir(cif_protein_monomer, output_dir, tmp_path)
+        result = CliRunner().invoke(
+            generate_train_config,
+            ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir), *extra_args],
+        )
+        return result, output_dir
+
+    def test_starts_from_default_pretrained_weights(
+        self, cif_protein_monomer, ccd_path, tmp_path, fake_pretrained_weights
+    ):
+        """By default train.yml loads OpenFold3's default weights from $OPENFOLD_CACHE,
+        model and EMA weights only."""
+        result, output_dir = self._generate(cif_protein_monomer, ccd_path, tmp_path)
+
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        settings = config["experiment_settings"]
+        assert settings["restart_checkpoint_path"] == str(fake_pretrained_weights.resolve())
+        assert settings["ckpt_load_settings"] == {"manual_checkpoint_loading": True}
+        TrainingExperimentConfig(**config)
+
+    def test_init_checkpoint_overrides_default_weights(self, cif_protein_monomer, ccd_path, tmp_path):
+        """--init-checkpoint starts from the given file instead of the default weights."""
+        weights = tmp_path / "my_weights.ckpt"
+        weights.touch()
+
+        result, output_dir = self._generate(
+            cif_protein_monomer, ccd_path, tmp_path, "--init-checkpoint", str(weights)
+        )
+
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        settings = config["experiment_settings"]
+        assert settings["restart_checkpoint_path"] == str(weights.resolve())
+        assert settings["ckpt_load_settings"] == {"manual_checkpoint_loading": True}
+        TrainingExperimentConfig(**config)
+
+    def test_from_scratch_uses_last_checkpoint_only(
+        self, cif_protein_monomer, ccd_path, tmp_path, monkeypatch
+    ):
+        """--from-scratch needs no pretrained weights: restart_checkpoint_path is "last"
+        and manual loading stays off."""
+        monkeypatch.setenv("OPENFOLD_CACHE", str(tmp_path / "empty_cache"))
+
+        result, output_dir = self._generate(cif_protein_monomer, ccd_path, tmp_path, "--from-scratch")
+
+        assert result.exit_code == 0, result.output
+        config = yaml.safe_load((output_dir / "train.yml").read_text())
+        settings = config["experiment_settings"]
+        assert settings["restart_checkpoint_path"] == "last"
+        assert "ckpt_load_settings" not in settings
+        TrainingExperimentConfig(**config)
+
+    def test_missing_pretrained_weights_is_an_error(
+        self, cif_protein_monomer, ccd_path, tmp_path, monkeypatch
+    ):
+        """Without the default weights, generate-train-config fails and says how to get them."""
+        monkeypatch.setenv("OPENFOLD_CACHE", str(tmp_path / "empty_cache"))
+
+        result, output_dir = self._generate(cif_protein_monomer, ccd_path, tmp_path)
+
+        assert result.exit_code == 1
+        assert "pixi run setup_openfold" in result.output
+        assert str(tmp_path / "empty_cache") in result.output
+        assert not (output_dir / "train.yml").exists()
+
+    def test_init_checkpoint_and_from_scratch_conflict(self, cif_protein_monomer, ccd_path, tmp_path):
+        weights = tmp_path / "my_weights.ckpt"
+        weights.touch()
+
+        result, _ = self._generate(
+            cif_protein_monomer, ccd_path, tmp_path, "--init-checkpoint", str(weights), "--from-scratch"
+        )
+
+        assert result.exit_code == 2
+        assert "cannot be used together" in result.output
 
     def test_sample_weights_make_every_datapoint_equal(self, cif_protein_monomer, ccd_path, tmp_path):
         """Flat sample_weights: with cluster_size = datapoints per structure, OF3
