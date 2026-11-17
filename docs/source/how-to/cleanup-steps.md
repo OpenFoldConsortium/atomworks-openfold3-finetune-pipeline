@@ -14,7 +14,7 @@ remove_clashing_chains: false
 
 [examples/cleanup_settings.yml](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/blob/main/examples/cleanup_settings.yml) lists every setting and what it does. A misspelled step name is reported as an error.
 
-## 2. Run the pipeline with it
+## 2. Run the pipeline with the settings file
 
 You can pass the settings file to `finetune-pipeline` or `finetune-prep` with `--cleanup-config`.
 
@@ -26,7 +26,7 @@ pixi run finetune-pipeline \
   --cleanup-config cleanup.yml
 ```
 
-## 3. Check what was used
+## 3. Check what settings were used
 
 The run prints the settings that differ from OpenFold3's defaults. Each dataset also records its settings in `<output-dir>/cleanup_settings.json`.
 
