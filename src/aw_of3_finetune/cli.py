@@ -646,8 +646,8 @@ def generate_train_config(
 
     Smoke-test defaults (see training_config.py); adds a validation section when a
     current split/ exists (split-dataset). Hand-edit for real runs.
-    Run from openfold-3 with:
-    pixi run -e openfold3-cuda12 run_openfold train --runner-yaml=<config-output>
+    Run from this repository with:
+    pixi run run_openfold train --runner-yaml=<config-output>
     """
     msa_dir = _require_organized_msa_dir(msa_dir, output_dir)
     config_path = write_train_config(

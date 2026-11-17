@@ -104,12 +104,13 @@ This set has no **Dropped** section. On your own data, that section lists any st
 
 ## 7. Train for one step (optional)
 
-This needs a GPU and a working OpenFold3 install from an [`openfold-3`](https://github.com/aqlaboratory/openfold-3) checkout next to this repository. `train.yml` runs one short training step, to prove the dataset trains.
+This needs a GPU. OpenFold3 is installed in this repository's pixi environment, so run training from here. `train.yml` runs one short training step, to prove the dataset trains.
 
 ```bash
-pixi run -e openfold3-cuda12 --manifest-path ../openfold-3/pixi.toml \
-  run_openfold train --runner-yaml=output/tutorial/train.yml
+pixi run run_openfold train --runner-yaml=output/tutorial/train.yml
 ```
+
+`train.yml` turns off OpenFold3's DeepSpeed and cuEquivariance kernels, which this environment does not install. To turn them on, run the same command in the `openfold3-cuda12` environment of an [`openfold-3`](https://github.com/aqlaboratory/openfold-3) checkout, with `pixi run -e openfold3-cuda12 --manifest-path ../openfold-3/pixi.toml`.
 
 It writes a 6.3 GB checkpoint to `output/tutorial/training_output/checkpoints/last.ckpt`. For a real run, raise `epoch_len` and `max_epochs` in `train.yml`.
 
