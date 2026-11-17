@@ -161,6 +161,10 @@ cleanup_config_option = click.option(
 )
 
 
+# click Context.meta key: where --ccd-path's value came from (see ccd_path_option).
+CCD_SOURCE_META_KEY = "aw_of3_finetune.ccd_source"
+
+
 def ccd_path_option(*, required: bool, help: str) -> Callable[[Callable], Callable]:
     """Add --ccd-path, falling back to $CCD_PATH and then the path stored by setup-finetuning.
 
@@ -183,6 +187,8 @@ def ccd_path_option(*, required: bool, help: str) -> Callable[[Callable], Callab
                                      ctx=ctx, param=param)
         if value is None:
             click.echo(f"Using the CCD at {path} (from {source}).", err=True)
+        # Shared with commands run through ctx.invoke, so finetune-prep can record it.
+        ctx.meta[CCD_SOURCE_META_KEY] = source
         return path
 
     return click.option(
@@ -420,7 +426,12 @@ def finetune_prep(
 
     structures_dir = output_dir / CLEANED_STRUCTURES_DIRNAME
     structures_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "cleanup_settings.json").write_text(cleanup_settings.model_dump_json(indent=2))
+    recorded = {
+        **cleanup_settings.model_dump(),
+        "ccd_path": str(ccd_path.resolve()) if ccd_path is not None else None,
+        "ccd_source": click.get_current_context().meta.get(CCD_SOURCE_META_KEY) if ccd_path is not None else None,
+    }
+    (output_dir / "cleanup_settings.json").write_text(json.dumps(recorded, indent=2))
     if not cleanup_settings.is_default():
         changed = ", ".join(f"{k}={v}" for k, v in cleanup_settings.non_default().items())
         click.echo(f"Cleanup settings differ from the defaults: {changed}")

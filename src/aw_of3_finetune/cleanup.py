@@ -61,6 +61,11 @@ _STEP_DESCRIPTIONS = {
 }
 
 
+# Keys finetune-prep adds to <output-dir>/cleanup_settings.json beside the cleanup steps:
+# the CCD it used and where that path came from. Not cleanup settings themselves.
+RECORDED_CCD_KEYS = ("ccd_path", "ccd_source")
+
+
 class CleanupSettings(BaseModel):
     """Per-step switches for structure cleanup; all on (OF3's cleanup) by default.
 
@@ -95,7 +100,12 @@ class CleanupSettings(BaseModel):
         Returns:
             The settings. Raises pydantic.ValidationError on unknown steps or bad values.
         """
-        return cls.model_validate(yaml.safe_load(path.read_text()) or {})
+        data = yaml.safe_load(path.read_text()) or {}
+        if isinstance(data, dict):
+            # finetune-prep's recorded cleanup_settings.json also names the CCD; skip that
+            # record so the file can be passed back as --cleanup-config.
+            data = {k: v for k, v in data.items() if k not in RECORDED_CCD_KEYS}
+        return cls.model_validate(data)
 
     def non_default(self) -> dict[str, bool | str]:
         """Steps whose value differs from the default.

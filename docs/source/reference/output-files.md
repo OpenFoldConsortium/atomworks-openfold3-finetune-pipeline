@@ -10,7 +10,7 @@
 | `dataset_cache.json` | Index of every structure, chain and interface |
 | `manifest.json` | The structures in the dataset |
 | `prep_dropped.json` | Structures `finetune-prep` left out, with reasons |
-| `cleanup_settings.json` | The cleanup settings used |
+| `cleanup_settings.json` | The cleanup settings used, plus the CCD (`ccd_path`) and where its path came from (`ccd_source`) |
 | `cleanup_steps/<id>.json` | What each cleanup step did to a structure |
 | `validation.json` | Findings of the V checks |
 | `train.yml` | OpenFold3 training config. Written only when there is an MSA folder |
