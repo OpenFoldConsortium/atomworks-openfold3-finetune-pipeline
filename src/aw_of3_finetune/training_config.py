@@ -189,8 +189,9 @@ def default_init_checkpoint() -> Path:
     if not path.is_file():
         raise MissingPretrainedWeightsError(
             f"OpenFold3's pretrained weights are not at {path}. Download them with "
-            "`pixi run setup_openfold --non-interactive --skip-biotite-ccd-update`, or pass --init-checkpoint <file> to start from other "
-            "weights, or --from-scratch to start from random weights."
+            "`pixi run setup_openfold --non-interactive --skip-biotite-ccd-update`, "
+            "or pass --init-checkpoint <file> to start from other weights, "
+            "or --from-scratch to start from random weights."
         )
     return path.resolve()
 
