@@ -48,7 +48,7 @@ pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
 
 ## Run it
 
-[examples/quickstart](examples/quickstart) holds two structures: `1stp.cif` (streptavidin with biotin) and `1ubq.cif` (ubiquitin).
+[examples/quickstart](examples/quickstart) holds three structures: `1stp.cif` (streptavidin with biotin), `1ubq.cif` (ubiquitin) and `7riv.cif` (the pregnane X receptor ligand-binding domain with a drug-like ligand).
 
 ```bash
 pixi run finetune-pipeline \
