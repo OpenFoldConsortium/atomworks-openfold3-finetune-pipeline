@@ -50,7 +50,7 @@ pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
 
 ### 4. Build a dataset
 
-The following command runs the pipeline on the two structures in [examples/quickstart](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/tree/main/examples/quickstart): `1stp.cif` (streptavidin with biotin) and `1ubq.cif` (ubiquitin).
+The following command runs the pipeline on the three structures in [examples/quickstart](https://github.com/OpenFoldConsortium/atomworks-openfold3-finetune-pipeline/tree/main/examples/quickstart): `1stp.cif` (streptavidin with biotin), `1ubq.cif` (ubiquitin) and `7riv.cif` (the pregnane X receptor ligand-binding domain with a drug-like ligand).
 
 ```bash
 pixi run finetune-pipeline \
@@ -61,6 +61,8 @@ pixi run finetune-pipeline \
 The default output directory is `./output`. You can specify a different output directory with `--output-dir`.
 
 Most of the run time is spent waiting for MSAs from the public ColabFold server. The MSAs are written to `output/organized_msas`.
+
+Only `7riv` receives templates. By default, a template must have been released before the structure it is used for, and `1stp` and `1ubq` are older than nearly all of their homologs in the PDB. See [Use a fixed template cutoff](how-to/template-cutoff.md) to change this rule.
 
 ### 5. Check the result
 
