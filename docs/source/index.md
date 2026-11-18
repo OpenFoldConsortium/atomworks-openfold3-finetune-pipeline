@@ -55,13 +55,12 @@ The following command runs the pipeline on the two structures in [examples/quick
 ```bash
 pixi run finetune-pipeline \
   --cif-dir examples/quickstart \
-  --organized-msa-dir output/organized_msas \
   --name quickstart
 ```
 
 The default output directory is `./output`. You can specify a different output directory with `--output-dir`.
 
-Most of the run time is spent waiting for MSAs from the public ColabFold server.
+Most of the run time is spent waiting for MSAs from the public ColabFold server. The MSAs are written to `output/organized_msas`.
 
 ### 5. Check the result
 

@@ -36,15 +36,14 @@ If the download fails, or the checksum is not reported as `OK`, see [Use live MS
 
 ## 3. Build the dataset
 
-Run the pipeline as follows. `--skip-existing` reuses the MSAs you unpacked in the previous step.
+Run the pipeline as follows. It reuses the MSAs you unpacked in the previous step and queries ColabFold only for sequences without one.
 
 ```bash
 pixi run finetune-pipeline \
   --cif-dir examples/tutorial \
   --output-dir output/tutorial \
   --organized-msa-dir output/msas \
-  --name tutorial \
-  --skip-existing
+  --name tutorial
 ```
 
 This takes under a minute. The pipeline runs ten stages, and the validate stage should print:
@@ -101,7 +100,7 @@ Training writes a 6.3 GB checkpoint to `output/tutorial/training_output/checkpoi
 
 ## Next steps
 
-To build a dataset from your own structures, you can point `--cif-dir` at your mmCIF files and run the same command without `--skip-existing`.
+To build a dataset from your own structures, you can point `--cif-dir` at your mmCIF files and run the same command.
 
 - For `.pdb` files, or ligands named `LIG`, see [Prepare a dataset from PDB files](../how-to/pdb-datasets.md).
 - To hold out structures for validation, see [Add a validation split](../how-to/validation-split.md).
@@ -110,6 +109,6 @@ To build a dataset from your own structures, you can point `--cif-dir` at your m
 
 ## Use live MSAs instead
 
-If you skip step 2, the pipeline can fetch MSAs from the public ColabFold server instead. To do this, run step 3 with an empty `--organized-msa-dir` and without `--skip-existing`.
+If you skip step 2, the pipeline can fetch MSAs from the public ColabFold server instead. To do this, run step 3 with an empty `--organized-msa-dir`.
 
 This took about 7 minutes in our tests. The time depends on the server's queue, and can be much longer.

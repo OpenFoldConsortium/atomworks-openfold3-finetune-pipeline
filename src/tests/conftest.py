@@ -118,6 +118,24 @@ def fake_pretrained_weights(isolate_ccd_settings) -> Path:
     return Path(os.environ["OPENFOLD_CACHE"]) / DEFAULT_WEIGHTS_FILE_NAME
 
 
+@pytest.fixture(autouse=True)
+def no_colabfold_outside_integration(request, monkeypatch):
+    """Fail any non-integration test that would query the public ColabFold server.
+
+    finetune-pipeline searches for MSAs by default, so a test that leaves out
+    --no-msa-search would otherwise go to the network. Tests can still monkeypatch
+    make_msas_colabfold_server_batch themselves.
+    """
+    if request.node.get_closest_marker("integration") is not None:
+        return
+    import aw_of3_finetune.cli as cli_mod
+
+    def _fail(*args, **kwargs):
+        pytest.fail("ColabFold must not be called outside integration tests (pass --no-msa-search)")
+
+    monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", _fail)
+
+
 @pytest.fixture(scope="session")
 def ccd_path() -> Path:
     """The CCD from $CCD_PATH or setup-finetuning's stored path; skips the test if neither is set."""

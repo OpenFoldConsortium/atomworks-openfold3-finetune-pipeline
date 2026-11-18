@@ -1183,9 +1183,16 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
 )
 @organized_msa_dir_option(
     exists=False,
-    help="MSA folder. If passed, runs generate-msas (live ColabFold queries) into it. If "
-    "omitted, ColabFold is never contacted and the MSA stage is skipped; an "
-    "<output-dir>/organized_msas folder left by an earlier run is still used by the later stages.",
+    help="MSA folder. generate-msas (live ColabFold queries) writes into it unless "
+    "--no-msa-search or --msa-sources is given.",
+)
+@click.option(
+    "--msa-search/--no-msa-search",
+    default=True,
+    show_default=True,
+    help="Query the ColabFold server for MSAs (generate-msas). With --no-msa-search, ColabFold "
+    "is never contacted and the MSA and template stages are skipped; an existing "
+    "--organized-msa-dir (default <output-dir>/organized_msas) is still used by the later stages.",
 )
 @click.option(
     "--msa-sources",
@@ -1222,20 +1229,22 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     "--server",
     default="https://api.colabfold.com",
     show_default=True,
-    help="ColabFold MSA server URL. Only used if --organized-msa-dir is given.",
+    help="ColabFold MSA server URL. Not used with --no-msa-search or --msa-sources.",
 )
 @click.option(
     "--user-agent",
     default="aw-of3-finetune",
     show_default=True,
-    help="User-agent string sent with API requests. Only used if --organized-msa-dir is given.",
+    help="User-agent string sent with API requests. Not used with --no-msa-search or --msa-sources.",
 )
 @click.option(
-    "--skip-existing",
-    is_flag=True,
-    default=False,
-    help="Skip sequences/complexes that already have an MSA. Only used if "
-    "--organized-msa-dir is given.",
+    "--skip-existing/--no-skip-existing",
+    default=True,
+    show_default=True,
+    help="Reuse MSAs already in --organized-msa-dir and query ColabFold only for "
+    "sequences/complexes without one. Template hits are not re-requested for reused "
+    "MSAs: pass --no-skip-existing to query everything again. Not used with "
+    "--no-msa-search or --msa-sources.",
 )
 @click.option(
     "--template-cutoff-date",
@@ -1250,8 +1259,8 @@ def _run_split_stage(output_dir: Path, cif_dir: Path, split_csv: Path) -> None:
     default=True,
     show_default=True,
     help="Request template hits in generate-msas, then run fetch-templates and "
-    "preprocess-templates (downloads hit structures from RCSB). Only used if "
-    "--organized-msa-dir is given.",
+    "preprocess-templates (downloads hit structures from RCSB). Not used with "
+    "--no-msa-search or --msa-sources.",
 )
 @click.option(
     "--cache-output",
@@ -1308,6 +1317,7 @@ def finetune_pipeline(
     cif_dir: Path,
     output_dir: Path,
     msa_dir: Path | None,
+    msa_search: bool,
     msa_sources: Path | None,
     ccd_path: Path,
     template_cache_dir: Path | None,
@@ -1337,16 +1347,17 @@ def finetune_pipeline(
     finetune-prep -> generate-msas (or import-msas with --msa-sources) -> fetch-templates ->
     materialize-dataset-cache ->
     preprocess-templates -> NPZ -> split-dataset (with --split-csv) -> generate-train-config ->
-    validate -> report. All but finetune-prep, materialize, NPZ, validate and report need
-    an MSA folder (--organized-msa-dir, or an existing <output-dir>/organized_msas); the
-    template stages also need --templates and MSAs generated in this run.
+    validate -> report. MSAs come from ColabFold unless --no-msa-search or --msa-sources is
+    given. All but finetune-prep, materialize, NPZ, validate and report need an MSA folder;
+    the template stages also need --templates and MSAs generated in this run.
     """
     click.echo(f"Writing pipeline output to {output_dir.resolve()}", err=True)
     if msa_sources is not None:
-        _refuse_colabfold_flags_with_msa_sources(ctx, templates)
-    # Only an explicit --organized-msa-dir without --msa-sources contacts ColabFold.
-    run_colabfold = msa_dir is not None and msa_sources is None
-    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=msa_sources is None)
+        _refuse_colabfold_flags_with_msa_sources(ctx, templates, msa_search)
+    run_colabfold = msa_search and msa_sources is None
+    msa_dir = resolve_organized_msa_dir(msa_dir, output_dir, must_exist=not run_colabfold and msa_sources is None)
+    if run_colabfold:
+        _refuse_user_msa_folder_for_colabfold(msa_dir)
     if init_checkpoint is not None and from_scratch:
         raise click.UsageError("--init-checkpoint and --from-scratch cannot be used together.")
     if msa_dir is not None and init_checkpoint is None and not from_scratch:
@@ -1354,7 +1365,8 @@ def finetune_pipeline(
     run_templates = run_colabfold and templates
     templates_skipped = (
         "templates with --msa-sources are not supported yet" if msa_sources is not None
-        else "no --organized-msa-dir or --no-templates"
+        else "--no-msa-search" if not msa_search
+        else "--no-templates"
     )
     if split_csv is not None:
         default_cache = output_dir / DATASET_CACHE_NAME
@@ -1405,7 +1417,7 @@ def finetune_pipeline(
             templates=templates,
         )
     else:
-        click.echo("\n=== Stage 2/10: generate-msas -- skipped (no --organized-msa-dir given) ===")
+        click.echo("\n=== Stage 2/10: generate-msas -- skipped (--no-msa-search) ===")
 
     if run_templates:
         click.echo("\n=== Stage 3/10: fetch-templates ===")
@@ -1504,28 +1516,54 @@ def finetune_pipeline(
     click.echo("\nDone.")
 
 
-def _refuse_colabfold_flags_with_msa_sources(ctx: click.Context, templates: bool) -> None:
+def _refuse_colabfold_flags_with_msa_sources(ctx: click.Context, templates: bool, msa_search: bool) -> None:
     """Refuse options that would silently do nothing next to --msa-sources.
 
     Args:
         ctx: finetune-pipeline's context.
         templates: The --templates/--no-templates value (an explicit --no-templates is fine).
+        msa_search: The --msa-search/--no-msa-search value (an explicit --no-msa-search is fine).
 
     Raises:
         click.UsageError: Naming the first such option given on the command line.
     """
     explicit = {
-        name for name in ("templates", "server", "user_agent", "skip_existing")
+        name for name in ("msa_search", "templates", "server", "user_agent", "skip_existing")
         if ctx.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE
     }
     if "templates" in explicit and not templates:
         explicit.discard("templates")
-    for name, flag in (("templates", "--templates"), ("server", "--server"),
+    if "msa_search" in explicit and not msa_search:
+        explicit.discard("msa_search")
+    if "skip_existing" in explicit and not ctx.params["skip_existing"]:
+        explicit.discard("skip_existing")
+    for name, flag in (("msa_search", "--msa-search"), ("templates", "--templates"), ("server", "--server"),
                        ("user_agent", "--user-agent"), ("skip_existing", "--skip-existing")):
         if name in explicit:
             reason = ("templates with --msa-sources are not supported yet" if name == "templates"
                       else "it only applies to ColabFold, which --msa-sources replaces")
             raise click.UsageError(f"{flag} cannot be used with --msa-sources: {reason}.")
+
+
+def _refuse_user_msa_folder_for_colabfold(msa_dir: Path) -> None:
+    """Fail before stage 1 if generate-msas would refuse the MSA folder anyway.
+
+    Args:
+        msa_dir: The resolved MSA folder.
+
+    Raises:
+        click.ClickException: If the folder holds MSAs imported with import-msas.
+    """
+    try:
+        kind = msa_dir_kind(msa_dir)
+    except MsaSourcesError as error:
+        raise click.ClickException(str(error)) from error
+    if kind == "user":
+        raise click.ClickException(
+            f"{msa_dir} holds user-provided MSAs (import-msas), and one MSA folder holds ColabFold or "
+            "user MSAs, not both. Pass --no-msa-search to use them as they are, --msa-sources to "
+            "import more, or a fresh --organized-msa-dir to query ColabFold."
+        )
 
 
 def _warn_report_failed(inputs: ValidityInputs, error: Exception) -> None:

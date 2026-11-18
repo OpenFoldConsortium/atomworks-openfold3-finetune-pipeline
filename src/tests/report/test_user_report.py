@@ -134,7 +134,7 @@ def test_uppercase_input_cif_name(ccd_path, tmp_path):
 
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
-        "--skip-dataset-load",
+        "--no-msa-search", "--skip-dataset-load",
     ], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
@@ -157,7 +157,7 @@ def test_custom_cache_output_is_read(ccd_path, tmp_path):
 
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
-        "--cache-output", str(tmp_path / "elsewhere.json"), "--skip-dataset-load",
+        "--cache-output", str(tmp_path / "elsewhere.json"), "--no-msa-search", "--skip-dataset-load",
     ], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output

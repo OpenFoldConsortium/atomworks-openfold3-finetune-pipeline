@@ -160,7 +160,7 @@ def test_finetune_pipeline_writes_report(cif_protein_monomer, cif_protein_only, 
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir),
         "--output-dir", str(tmp_path / "out"),
-        "--ccd-path", str(ccd_path),
+        "--ccd-path", str(ccd_path), "--no-msa-search",
     ], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
@@ -187,7 +187,7 @@ def test_skip_report_writes_nothing(cif_protein_monomer, ccd_path, tmp_path):
     out = tmp_path / "out"
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load", "--skip-report",
     ], catch_exceptions=False)
 
@@ -207,7 +207,7 @@ def test_report_written_when_validate_fails(cif_protein_monomer, ccd_path, tmp_p
     monkeypatch.setitem(validate_pkg.CHECKS, FINITE_COORDINATES, always_error)
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 
@@ -229,7 +229,7 @@ def test_report_crash_keeps_clean_exit(cif_protein_monomer, ccd_path, tmp_path, 
     monkeypatch.setattr(cli_module, "write_user_report", _boom_report)
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 
@@ -251,7 +251,7 @@ def test_report_crash_keeps_validate_failure(cif_protein_monomer, ccd_path, tmp_
     monkeypatch.setattr(cli_module, "write_user_report", _boom_report)
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 
@@ -268,7 +268,7 @@ def test_leftover_non_report_folder_fails_before_stage_1(cif_protein_monomer, cc
     keep.write_text("x")
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ])
 
@@ -335,7 +335,7 @@ def test_finetune_pipeline_validates_custom_cache_output(cif_protein_monomer, cc
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir),
         "--output-dir", str(tmp_path / "out"),
-        "--ccd-path", str(ccd_path),
+        "--ccd-path", str(ccd_path), "--no-msa-search",
         "--cache-output", str(custom),
     ], catch_exceptions=False)
 
@@ -434,7 +434,7 @@ def test_finetune_pipeline_skip_dataset_load(cif_protein_monomer, ccd_path, tmp_
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir),
         "--output-dir", str(tmp_path / "out"),
-        "--ccd-path", str(ccd_path),
+        "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 

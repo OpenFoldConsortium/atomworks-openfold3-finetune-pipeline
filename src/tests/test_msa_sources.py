@@ -858,7 +858,7 @@ def _pipeline_output(tmp_path: Path, ccd_path: Path, cifs: dict[str, Path], *ext
     output_dir = tmp_path / "out"
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir), "--output-dir", str(output_dir), "--ccd-path", str(ccd_path),
-        "--skip-report", "--skip-validation", *extra,
+        "--no-msa-search", "--skip-report", "--skip-validation", *extra,
     ], catch_exceptions=False)
     assert result.exit_code == 0, result.output
     return output_dir
