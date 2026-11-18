@@ -53,7 +53,6 @@ pixi run setup_openfold --non-interactive --skip-biotite-ccd-update
 ```bash
 pixi run finetune-pipeline \
   --cif-dir examples/quickstart \
-  --organized-msa-dir output/organized_msas \
   --name quickstart
 ```
 

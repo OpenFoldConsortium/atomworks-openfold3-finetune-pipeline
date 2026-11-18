@@ -22,14 +22,15 @@ Run every stage over a directory of mmCIFs.
 |---|---|---|
 | `--cif-dir` | Required | Directory of input mmCIF files. |
 | `--output-dir` | `output` | Output directory for every pipeline artifact. |
-| `--organized-msa-dir` | None | MSA folder. If given, generate-msas queries ColabFold into it. If not, ColabFold is never contacted, and an existing `<output-dir>/organized_msas` from an earlier run is used. |
+| `--organized-msa-dir` | `<output-dir>/organized_msas` | MSA folder. generate-msas queries ColabFold into it unless `--no-msa-search` or `--msa-sources` is given. |
+| `--msa-search` / `--no-msa-search` | On | Query the ColabFold server for MSAs. With `--no-msa-search`, ColabFold is never contacted and the MSA and template stages are skipped; an existing `--organized-msa-dir` is still used by the later stages. |
 | `--msa-sources` | None | Use existing MSAs instead of ColabFold: a sources manifest for your own MSA files, or the MSA folder of an earlier run (see [Use your own MSAs](../how-to/user-msas.md)). Skips the template stages. |
 | `--ccd-path` | Stored CCD | Path to the Chemical Component Dictionary mmCIF. |
 | `--template-cache-dir` | None | Pre-built OpenFold3 template cache directory. |
 | `--name` | `finetune` | Dataset name written into manifest.json. |
 | `--server` | `https://api.colabfold.com` | ColabFold MSA server URL. |
 | `--user-agent` | `aw-of3-finetune` | User-agent string sent with API requests. |
-| `--skip-existing` | Off | Skip sequences/complexes that already have an MSA. |
+| `--skip-existing` / `--no-skip-existing` | On | Reuse MSAs already in `--organized-msa-dir` and query ColabFold only for sequences/complexes without one. Template hits are not re-requested for reused MSAs; pass `--no-skip-existing` to query everything again. |
 | `--template-cutoff-date` | None | Keep templates released before this date (YYYY-MM-DD), whatever each structure's own release date. |
 | `--templates` / `--no-templates` | On | Request template hits in generate-msas, then run fetch-templates and preprocess-templates (downloads hit structures from RCSB). |
 | `--cache-output` | None | Path to write the full dataset cache JSON. |

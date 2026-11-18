@@ -23,14 +23,10 @@ from atomworks.ml.preprocessing.msa.finding import find_msas
 from atomworks.ml.preprocessing.msa.organizing import MSAOrganizationConfig, organize_msas
 from click.testing import CliRunner
 
-import aw_of3_finetune.cli as cli_mod
-from aw_of3_finetune.cli import (
-    finetune_pipeline,
-    finetune_prep,
-    generate_msas,
-    generate_train_config,
-    import_msas,
-)
+from aw_of3_finetune.cli.msas import generate_msas, import_msas
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.prep import finetune_prep
+from aw_of3_finetune.cli.training import generate_train_config
 from aw_of3_finetune.training_config import discover_msa_sources, msa_settings_for_sources
 from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
 
@@ -782,7 +778,7 @@ class TestGenerateMsasIndex:
     def no_colabfold(self, monkeypatch):
         """ColabFold replaced by a no-op that records its calls."""
         calls: list[dict] = []
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
         return calls
 
     def test_generate_msas_writes_index(self, cif_protein_monomer, tmp_path, no_colabfold):
@@ -825,7 +821,7 @@ class TestGenerateMsasIndex:
         def fail(*a, **kw):
             raise RuntimeError("server down")
 
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", fail)
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", fail)
         result = CliRunner().invoke(
             generate_msas, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
         )
@@ -838,7 +834,7 @@ class TestGenerateMsasIndex:
         msa_dir = tmp_path / "msas"
         _write_index(msa_dir, {"x": "msa_sources/x"})
         monkeypatch.setattr(
-            cli_mod, "make_msas_colabfold_server_batch", lambda *a, **k: pytest.fail("ColabFold must not be called")
+            "aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **k: pytest.fail("ColabFold must not be called")
         )
 
         result = CliRunner().invoke(
@@ -858,7 +854,7 @@ def _pipeline_output(tmp_path: Path, ccd_path: Path, cifs: dict[str, Path], *ext
     output_dir = tmp_path / "out"
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir), "--output-dir", str(output_dir), "--ccd-path", str(ccd_path),
-        "--skip-report", "--skip-validation", *extra,
+        "--no-msa-search", "--skip-report", "--skip-validation", *extra,
     ], catch_exceptions=False)
     assert result.exit_code == 0, result.output
     return output_dir

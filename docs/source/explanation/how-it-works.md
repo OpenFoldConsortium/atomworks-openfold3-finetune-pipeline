@@ -12,10 +12,10 @@ The pipeline turns a directory of mmCIF files into everything OpenFold3 needs fo
 |---|---|
 | `prepare-inputs` | Run separately, before the pipeline |
 | `import-msas` | `--msa-sources` is given |
-| `generate-msas` | `--organized-msa-dir` is given, without `--msa-sources` |
+| `generate-msas` | Neither `--no-msa-search` nor `--msa-sources` is given |
 | `fetch-templates`, `preprocess-templates` | `generate-msas` ran, and `--no-templates` is not given |
 | `split-dataset` | `--split-csv` is given |
-| `generate-train-config` | There is an MSA folder: one from step 2, or an `<output-dir>/organized_msas` left by an earlier run |
+| `generate-train-config` | There is an MSA folder: one from step 2, or, with `--no-msa-search`, an existing `--organized-msa-dir` (by default `<output-dir>/organized_msas`) |
 | `validate-dataset` | `--skip-validation` is not given |
 | `finetune-report` | `--skip-report` is not given |
 

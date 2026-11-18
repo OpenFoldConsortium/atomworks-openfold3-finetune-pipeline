@@ -49,7 +49,7 @@ pixi run finetune-pipeline \
   --name <dataset-name>
 ```
 
-Stage 2 runs `import-msas` instead of `generate-msas`. The MSAs are written to `<output-dir>/organized_msas`; you can specify a different folder with `--organized-msa-dir`. The template stages are skipped, because templates are not yet supported with your own MSAs. For the same reason, `--templates`, `--server`, `--user-agent` and `--skip-existing` cannot be combined with `--msa-sources`.
+Stage 2 runs `import-msas` instead of `generate-msas`. The MSAs are written to `<output-dir>/organized_msas`; you can specify a different folder with `--organized-msa-dir`. The template stages are skipped, because templates are not yet supported with your own MSAs. For the same reason, `--msa-search`, `--templates`, `--server`, `--user-agent` and `--skip-existing` cannot be combined with `--msa-sources`.
 
 You can also run the stages individually: `import-msas` after `finetune-prep`, followed by `generate-train-config`:
 
@@ -91,7 +91,7 @@ The new MSA folder then holds only `msa_index.yml` and `of3_alignments/`, which 
 
 **The earlier folder must stay where it is.** `materialize-dataset-cache`, and any rerun of `finetune-pipeline`, rebuild `of3_alignments/` from it. If the folder has been moved or deleted, they warn that the source's folder is missing and remove that source's MSAs from `of3_alignments/`. Training reads only `of3_alignments/`, so a finished `train.yml` continues to work. If you need a self-contained copy, you can write a manifest instead, since files listed in a manifest are always copied.
 
-Templates are not yet carried over in this way. To reuse ColabFold MSAs and keep templates, you can point `--organized-msa-dir` at the earlier folder and add `--skip-existing`, which queries ColabFold only for sequences that are not already in the folder.
+Templates are not yet carried over in this way. To reuse ColabFold MSAs and keep templates, you can point `--organized-msa-dir` at the earlier folder instead. The pipeline then queries ColabFold only for sequences that are not already in the folder.
 
 ## Remove a source
 

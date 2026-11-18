@@ -27,9 +27,9 @@ from click.testing import CliRunner
 from openfold3.core.data.io.sequence.msa import parse_msas_direct, standardize_filepaths
 from requests.exceptions import SSLError
 
-import aw_of3_finetune.cli as cli_mod
-from aw_of3_finetune.cli import fetch_templates as fetch_templates_cli
-from aw_of3_finetune.cli import finetune_prep, generate_msas
+from aw_of3_finetune.cli.templates import fetch_templates as fetch_templates_cli
+from aw_of3_finetune.cli.msas import generate_msas
+from aw_of3_finetune.cli.prep import finetune_prep
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.pipeline import reorganize_msas_for_of3
 from aw_of3_finetune.templates import (
@@ -160,7 +160,7 @@ class TestGenerateMsasTemplatesFlag:
         """
         calls: list[dict] = []
         monkeypatch.setattr(
-            cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw)
+            "aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw)
         )
         return calls
 
@@ -224,7 +224,7 @@ class TestGenerateMsasExistingPaired:
         output_dir, msa_dir = hemoglobin
         complex_dir = self._seed_paired_dir(output_dir, msa_dir)
         calls = []
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
 
         result = CliRunner().invoke(
             generate_msas, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
@@ -244,7 +244,7 @@ class TestGenerateMsasExistingPaired:
         output_dir, msa_dir = hemoglobin
         complex_dir = self._seed_paired_dir(output_dir, msa_dir)
         calls = []
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
 
         result = CliRunner().invoke(
             generate_msas,
@@ -272,7 +272,7 @@ class TestGenerateMsasExistingPaired:
             with gzip.open(complex_dir / f"{hash_sequence(seq)}.a3m.gz", "wt") as f:
                 f.write(f">query\n{seq}\n")
         calls = []
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
 
         result = CliRunner().invoke(
             generate_msas,
@@ -648,7 +648,7 @@ def test_fetch_templates_direct_download(ubq):
 
 def test_max_hits_defaults_to_50():
     """fetch-templates (and finetune-pipeline, which uses its defaults) resolves 50 hits per sequence."""
-    from aw_of3_finetune.cli import fetch_templates as fetch_templates_command
+    from aw_of3_finetune.cli.templates import fetch_templates as fetch_templates_command
 
     expected_default = 50
     actual_default = next(p.default for p in fetch_templates_command.params if p.name == "max_hits")

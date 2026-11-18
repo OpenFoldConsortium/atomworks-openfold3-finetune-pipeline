@@ -6,14 +6,17 @@ unsets $CCD_PATH for every test, so each test sets up exactly the CCD settings i
 
 from __future__ import annotations
 
+import importlib
+import pkgutil
 from pathlib import Path
 
 import click
 import pytest
 from click.testing import CliRunner
 
-import aw_of3_finetune.cli as cli_mod
-from aw_of3_finetune.cli import ccd_path_option, setup_finetuning
+import aw_of3_finetune.cli
+from aw_of3_finetune.cli.options import ccd_path_option
+from aw_of3_finetune.cli.prep import setup_finetuning
 from aw_of3_finetune.constants import DEFAULT_OUTPUT_DIR
 from aw_of3_finetune.openfold_cache import (
     CHECKPOINT_ROOT_FILENAME,
@@ -157,8 +160,10 @@ class TestSetupFinetuning:
 class TestOutputDirDefault:
     def test_every_command_on_the_pipeline_folder_defaults_to_output(self):
         # prepare-inputs is left out: its --output-dir is a separate folder of prepared CIFs.
-        commands = [getattr(cli_mod, name) for name in dir(cli_mod)
-                    if isinstance(getattr(cli_mod, name), click.Command) and name != "prepare_inputs"]
+        modules = [importlib.import_module(f"aw_of3_finetune.cli.{m.name}")
+                   for m in pkgutil.iter_modules(aw_of3_finetune.cli.__path__)]
+        commands = {c for module in modules for c in vars(module).values()
+                    if isinstance(c, click.Command) and c.name != "prepare-inputs"}
         with_output_dir = {c.name: next(p for p in c.params if p.name == "output_dir")
                            for c in commands if any(p.name == "output_dir" for p in c.params)}
         assert "finetune-pipeline" in with_output_dir

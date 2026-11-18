@@ -8,7 +8,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import finetune_prep, materialize_dataset_cache
+from aw_of3_finetune.cli.prep import finetune_prep, materialize_dataset_cache
 from aw_of3_finetune.msa import collect_msa_queries
 from aw_of3_finetune.pipeline import save_structures_as_npz
 from aw_of3_finetune.validate.context import ValidationContext

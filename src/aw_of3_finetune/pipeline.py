@@ -6,7 +6,6 @@ Chain metadata is always built from OF3's parse of this pipeline's own augmented
 
 from __future__ import annotations
 
-import gzip
 import json
 import logging
 import shutil

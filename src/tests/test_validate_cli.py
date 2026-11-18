@@ -8,9 +8,10 @@ from click.testing import CliRunner
 from openfold3.core.data.io.dataset_cache import read_datacache
 
 from aw_of3_finetune.validate.check_ids import DATASET_LOADS, FINITE_COORDINATES
-from aw_of3_finetune import cli as cli_module
 from aw_of3_finetune import validate as validate_pkg
-from aw_of3_finetune.cli import finetune_pipeline, split_dataset, validate
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.training import split_dataset
+from aw_of3_finetune.cli.validate_dataset import validate
 from aw_of3_finetune.split import dataset_cache_sha256, split_paths
 from aw_of3_finetune.templates import TEMPLATE_DATA_DIRNAME
 from aw_of3_finetune.training_config import build_train_config
@@ -103,7 +104,7 @@ def test_validate_cli_defaults_template_structure_dir(built_dataset, ccd_path, m
         seen["ctx"] = ctx
         raise SystemExit(0)
 
-    monkeypatch.setattr("aw_of3_finetune.cli.run_validation", fake_run)
+    monkeypatch.setattr("aw_of3_finetune.cli.validate_dataset.run_validation", fake_run)
 
     # Default: derived from the MSA directory.
     result = CliRunner().invoke(validate, _args(built_dataset, ccd_path))
@@ -128,7 +129,7 @@ def _template_cache_dir_seen(built, ccd_path, monkeypatch):
         seen["ctx"] = ctx
         raise SystemExit(0)
 
-    monkeypatch.setattr("aw_of3_finetune.cli.run_validation", fake_run)
+    monkeypatch.setattr("aw_of3_finetune.cli.validate_dataset.run_validation", fake_run)
     result = CliRunner().invoke(validate, _args(built, ccd_path))
     assert result.exit_code == 0, result.output
     return seen["ctx"].template_cache_dir
@@ -160,7 +161,7 @@ def test_finetune_pipeline_writes_report(cif_protein_monomer, cif_protein_only, 
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir),
         "--output-dir", str(tmp_path / "out"),
-        "--ccd-path", str(ccd_path),
+        "--ccd-path", str(ccd_path), "--no-msa-search",
     ], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
@@ -187,7 +188,7 @@ def test_skip_report_writes_nothing(cif_protein_monomer, ccd_path, tmp_path):
     out = tmp_path / "out"
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load", "--skip-report",
     ], catch_exceptions=False)
 
@@ -207,7 +208,7 @@ def test_report_written_when_validate_fails(cif_protein_monomer, ccd_path, tmp_p
     monkeypatch.setitem(validate_pkg.CHECKS, FINITE_COORDINATES, always_error)
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 
@@ -226,10 +227,10 @@ def test_report_crash_keeps_clean_exit(cif_protein_monomer, ccd_path, tmp_path, 
     """A crashing report stage after a clean validate warns and still exits 0."""
     cif_dir = _single_cif_dir(tmp_path, cif_protein_monomer)
     out = tmp_path / "out"
-    monkeypatch.setattr(cli_module, "write_user_report", _boom_report)
+    monkeypatch.setattr("aw_of3_finetune.cli.report.write_user_report", _boom_report)
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 
@@ -248,10 +249,10 @@ def test_report_crash_keeps_validate_failure(cif_protein_monomer, ccd_path, tmp_
         return [validate_pkg.Finding(FINITE_COORDINATES, validate_pkg.Severity.ERROR, "3u8v", "forced error")]
 
     monkeypatch.setitem(validate_pkg.CHECKS, FINITE_COORDINATES, always_error)
-    monkeypatch.setattr(cli_module, "write_user_report", _boom_report)
+    monkeypatch.setattr("aw_of3_finetune.cli.report.write_user_report", _boom_report)
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 
@@ -268,7 +269,7 @@ def test_leftover_non_report_folder_fails_before_stage_1(cif_protein_monomer, cc
     keep.write_text("x")
 
     result = CliRunner().invoke(finetune_pipeline, [
-        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
+        "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ])
 
@@ -335,7 +336,7 @@ def test_finetune_pipeline_validates_custom_cache_output(cif_protein_monomer, cc
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir),
         "--output-dir", str(tmp_path / "out"),
-        "--ccd-path", str(ccd_path),
+        "--ccd-path", str(ccd_path), "--no-msa-search",
         "--cache-output", str(custom),
     ], catch_exceptions=False)
 
@@ -434,7 +435,7 @@ def test_finetune_pipeline_skip_dataset_load(cif_protein_monomer, ccd_path, tmp_
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir),
         "--output-dir", str(tmp_path / "out"),
-        "--ccd-path", str(ccd_path),
+        "--ccd-path", str(ccd_path), "--no-msa-search",
         "--skip-dataset-load",
     ], catch_exceptions=False)
 

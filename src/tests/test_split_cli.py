@@ -6,7 +6,7 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import split_dataset
+from aw_of3_finetune.cli.training import split_dataset
 from aw_of3_finetune.split import split_paths
 from validate_helpers import mutable_copy
 

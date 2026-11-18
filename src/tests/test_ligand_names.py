@@ -7,7 +7,8 @@ from pathlib import Path
 import numpy as np
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import finetune_pipeline, finetune_prep
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.prep import finetune_prep
 from aw_of3_finetune.validate import run_validation
 from aw_of3_finetune.validate.check_ids import ONE_CHEMISTRY_PER_MOL_ID
 from conftest import FIXTURES_MMCIFS

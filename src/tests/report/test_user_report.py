@@ -3,7 +3,8 @@
 import pytest
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import finetune_pipeline, finetune_report
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.report import finetune_report
 from aw_of3_finetune.report.build import REPORT_MARKER, build_report
 from aw_of3_finetune.report.user import ReportDirError, write_user_report
 from aw_of3_finetune.report.validity import ValidityInputs
@@ -134,7 +135,7 @@ def test_uppercase_input_cif_name(ccd_path, tmp_path):
 
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
-        "--skip-dataset-load",
+        "--no-msa-search", "--skip-dataset-load",
     ], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
@@ -157,7 +158,7 @@ def test_custom_cache_output_is_read(ccd_path, tmp_path):
 
     result = CliRunner().invoke(finetune_pipeline, [
         "--cif-dir", str(cif_dir), "--output-dir", str(out), "--ccd-path", str(ccd_path),
-        "--cache-output", str(tmp_path / "elsewhere.json"), "--skip-dataset-load",
+        "--cache-output", str(tmp_path / "elsewhere.json"), "--no-msa-search", "--skip-dataset-load",
     ], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
