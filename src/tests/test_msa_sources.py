@@ -23,7 +23,6 @@ from atomworks.ml.preprocessing.msa.finding import find_msas
 from atomworks.ml.preprocessing.msa.organizing import MSAOrganizationConfig, organize_msas
 from click.testing import CliRunner
 
-import aw_of3_finetune.cli as cli_mod
 from aw_of3_finetune.cli import (
     finetune_pipeline,
     finetune_prep,
@@ -782,7 +781,7 @@ class TestGenerateMsasIndex:
     def no_colabfold(self, monkeypatch):
         """ColabFold replaced by a no-op that records its calls."""
         calls: list[dict] = []
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **kw: calls.append(kw))
         return calls
 
     def test_generate_msas_writes_index(self, cif_protein_monomer, tmp_path, no_colabfold):
@@ -825,7 +824,7 @@ class TestGenerateMsasIndex:
         def fail(*a, **kw):
             raise RuntimeError("server down")
 
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", fail)
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", fail)
         result = CliRunner().invoke(
             generate_msas, ["--output-dir", str(output_dir), "--organized-msa-dir", str(msa_dir)]
         )
@@ -838,7 +837,7 @@ class TestGenerateMsasIndex:
         msa_dir = tmp_path / "msas"
         _write_index(msa_dir, {"x": "msa_sources/x"})
         monkeypatch.setattr(
-            cli_mod, "make_msas_colabfold_server_batch", lambda *a, **k: pytest.fail("ColabFold must not be called")
+            "aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", lambda *a, **k: pytest.fail("ColabFold must not be called")
         )
 
         result = CliRunner().invoke(

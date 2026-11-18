@@ -128,12 +128,11 @@ def no_colabfold_outside_integration(request, monkeypatch):
     """
     if request.node.get_closest_marker("integration") is not None:
         return
-    import aw_of3_finetune.cli as cli_mod
 
     def _fail(*args, **kwargs):
         pytest.fail("ColabFold must not be called outside integration tests (pass --no-msa-search)")
 
-    monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", _fail)
+    monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", _fail)
 
 
 @pytest.fixture(scope="session")

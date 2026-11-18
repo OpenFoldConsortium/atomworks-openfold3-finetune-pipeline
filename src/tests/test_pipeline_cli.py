@@ -34,7 +34,7 @@ from openfold3.entry_points.validator import TrainingExperimentConfig
 
 from assertions import write_emptiable_minimal_3aa
 from validate_helpers import mutable_copy
-import aw_of3_finetune.cli as cli_mod
+import aw_of3_finetune.cli.prep as cli_prep
 
 from aw_of3_finetune.split import split_paths
 from aw_of3_finetune.augmented_cif import read_augmented_cif
@@ -717,7 +717,7 @@ class TestFinetunePrep:
         def boom(out_cif, structure_data):
             raise ChainMismatchError(f"{out_cif.name}: injected mismatch")
 
-        monkeypatch.setattr(cli_mod, "check_chain_consistency", boom)
+        monkeypatch.setattr("aw_of3_finetune.cli.prep.check_chain_consistency", boom)
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
@@ -736,14 +736,14 @@ class TestFinetunePrep:
     ):
         """--skip-inconsistent: the flagged structure is warned about and dropped
         (no augmented CIF, not in the manifest); the other still goes through."""
-        real = cli_mod.check_chain_consistency
+        real = cli_prep.check_chain_consistency
 
         def fail_2crb(out_cif, structure_data):
             if out_cif.stem == "2crb":
                 raise ChainMismatchError(f"{out_cif.name}: injected mismatch")
             real(out_cif, structure_data)
 
-        monkeypatch.setattr(cli_mod, "check_chain_consistency", fail_2crb)
+        monkeypatch.setattr("aw_of3_finetune.cli.prep.check_chain_consistency", fail_2crb)
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
@@ -1753,7 +1753,7 @@ class TestOrganizedMsaDirOption:
             for seq in seqs:
                 _make_unpaired_msa_gz(seq, output_dir)
 
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", fake_colabfold)
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", fake_colabfold)
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
@@ -1798,7 +1798,7 @@ class TestOrganizedMsaDirOption:
             for seq in seqs:
                 _make_unpaired_msa_gz(seq, output_dir)
 
-        monkeypatch.setattr(cli_mod, "make_msas_colabfold_server_batch", fake_colabfold)
+        monkeypatch.setattr("aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch", fake_colabfold)
         cif_dir = tmp_path / "input"
         cif_dir.mkdir()
         (cif_dir / "3u8v.cif").symlink_to(cif_protein_monomer.resolve())
@@ -1863,7 +1863,7 @@ class TestFinetunePipelineMsaSources:
     @pytest.fixture
     def no_colabfold(self, monkeypatch):
         monkeypatch.setattr(
-            cli_mod, "make_msas_colabfold_server_batch",
+            "aw_of3_finetune.cli.msas.make_msas_colabfold_server_batch",
             lambda *a, **k: pytest.fail("ColabFold must not be called"),
         )
 
