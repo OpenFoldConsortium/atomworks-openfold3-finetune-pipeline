@@ -13,7 +13,7 @@ from openfold3.projects.of3_all_atom.config.dataset_configs import (
     TrainingDatasetPaths,
 )
 
-from aw_of3_finetune.split import split_dataset_cache, split_paths
+from aw_of3_finetune.split import split_dataset_cache
 from aw_of3_finetune.training_config import build_train_config
 from validate_helpers import mutable_copy
 

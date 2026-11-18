@@ -1,7 +1,6 @@
 import json
 
 import numpy as np
-import pytest
 from biotite.structure import Atom, array
 from openfold3.core.data.io.structure.atom_array import write_atomarray_to_npz
 
