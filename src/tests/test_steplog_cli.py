@@ -9,7 +9,7 @@ from biotite.structure.io.pdbx import CIFCategory, CIFFile
 from click.testing import CliRunner
 
 from assertions import write_emptiable_minimal_3aa
-from aw_of3_finetune.cli import finetune_prep
+from aw_of3_finetune.cli.prep import finetune_prep
 from aw_of3_finetune.pipeline import prepare_augmented_cif
 from aw_of3_finetune.steplog import StepLog
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from aw_of3_finetune.cleanup import CleanupSettings
-from aw_of3_finetune.cli.checks import (
+from aw_of3_finetune.cli.preflight import (
     refuse_colabfold_flags_with_msa_sources,
     refuse_user_msa_folder_for_colabfold,
 )
@@ -24,7 +24,7 @@ from aw_of3_finetune.cli.prep import finetune_prep, materialize_dataset_cache
 from aw_of3_finetune.cli.report import warn_report_failed, write_report
 from aw_of3_finetune.cli.templates import fetch_templates, preprocess_templates
 from aw_of3_finetune.cli.training import generate_train_config, run_split_stage
-from aw_of3_finetune.cli.validation import validate
+from aw_of3_finetune.cli.validate_dataset import validate
 from aw_of3_finetune.constants import (
     CLEANED_STRUCTURES_DIRNAME,
     COMPRESSED_STRUCTURES_DIRNAME,

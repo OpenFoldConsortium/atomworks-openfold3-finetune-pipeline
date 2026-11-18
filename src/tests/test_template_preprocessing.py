@@ -29,14 +29,10 @@ from openfold3.projects.of3_all_atom.config.dataset_configs import (
     TrainingDatasetPaths,
 )
 
-from aw_of3_finetune.cli import (
-    fetch_templates,
-    finetune_prep,
-    generate_train_config,
-    materialize_dataset_cache,
-    finetune_pipeline,
-    preprocess_templates,
-)
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.prep import finetune_prep, materialize_dataset_cache
+from aw_of3_finetune.cli.templates import fetch_templates, preprocess_templates
+from aw_of3_finetune.cli.training import generate_train_config
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.pipeline import save_structures_as_npz
 from aw_of3_finetune.constants import TEMPLATE_CUTOFF_FILENAME

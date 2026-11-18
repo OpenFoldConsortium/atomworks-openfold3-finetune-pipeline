@@ -10,7 +10,7 @@ from atomworks.ml.preprocessing.msa.colabfold_server import (
 )
 from atomworks.ml.preprocessing.msa.finding import find_msas, find_paired_msas
 
-from aw_of3_finetune.cli.checks import check_paired_dirs_writable
+from aw_of3_finetune.cli.preflight import check_paired_dirs_writable
 from aw_of3_finetune.cli.options import (
     organized_msa_dir_option,
     output_dir_option,

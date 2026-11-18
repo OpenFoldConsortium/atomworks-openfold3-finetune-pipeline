@@ -8,7 +8,7 @@ from biotite.structure.io.pdbx import CIFFile
 from click.testing import CliRunner
 from rdkit import Chem
 
-from aw_of3_finetune.cli import finetune_prep, prepare_inputs
+from aw_of3_finetune.cli.prep import finetune_prep, prepare_inputs
 from aw_of3_finetune.ligand_inputs import LigandNamer, LigandRow, ccd_codes, read_ligand_table
 from aw_of3_finetune.prepare_inputs import (
     DEFAULT_RELEASE_DATE,

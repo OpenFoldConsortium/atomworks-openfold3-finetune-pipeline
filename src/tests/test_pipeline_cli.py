@@ -43,12 +43,9 @@ import json
 
 import yaml
 
-from aw_of3_finetune.cli import (
-    finetune_pipeline,
-    finetune_prep,
-    generate_train_config,
-    materialize_dataset_cache,
-)
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.prep import finetune_prep, materialize_dataset_cache
+from aw_of3_finetune.cli.training import generate_train_config
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.msa_sources import MixedMsaDirError
 from aw_of3_finetune.split import split_dataset_cache, split_paths

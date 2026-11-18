@@ -9,7 +9,9 @@ from openfold3.core.data.io.dataset_cache import read_datacache
 
 from aw_of3_finetune.validate.check_ids import DATASET_LOADS, FINITE_COORDINATES
 from aw_of3_finetune import validate as validate_pkg
-from aw_of3_finetune.cli import finetune_pipeline, split_dataset, validate
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.training import split_dataset
+from aw_of3_finetune.cli.validate_dataset import validate
 from aw_of3_finetune.split import dataset_cache_sha256, split_paths
 from aw_of3_finetune.templates import TEMPLATE_DATA_DIRNAME
 from aw_of3_finetune.training_config import build_train_config
@@ -102,7 +104,7 @@ def test_validate_cli_defaults_template_structure_dir(built_dataset, ccd_path, m
         seen["ctx"] = ctx
         raise SystemExit(0)
 
-    monkeypatch.setattr("aw_of3_finetune.cli.validation.run_validation", fake_run)
+    monkeypatch.setattr("aw_of3_finetune.cli.validate_dataset.run_validation", fake_run)
 
     # Default: derived from the MSA directory.
     result = CliRunner().invoke(validate, _args(built_dataset, ccd_path))
@@ -127,7 +129,7 @@ def _template_cache_dir_seen(built, ccd_path, monkeypatch):
         seen["ctx"] = ctx
         raise SystemExit(0)
 
-    monkeypatch.setattr("aw_of3_finetune.cli.validation.run_validation", fake_run)
+    monkeypatch.setattr("aw_of3_finetune.cli.validate_dataset.run_validation", fake_run)
     result = CliRunner().invoke(validate, _args(built, ccd_path))
     assert result.exit_code == 0, result.output
     return seen["ctx"].template_cache_dir

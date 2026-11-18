@@ -10,19 +10,19 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 
 [project.scripts]
-prepare-inputs = "aw_of3_finetune.cli:prepare_inputs"
-finetune-prep = "aw_of3_finetune.cli:finetune_prep"
-materialize-dataset-cache = "aw_of3_finetune.cli:materialize_dataset_cache"
-generate-msas = "aw_of3_finetune.cli:generate_msas"
-import-msas = "aw_of3_finetune.cli:import_msas"
-fetch-templates = "aw_of3_finetune.cli:fetch_templates"
-preprocess-templates = "aw_of3_finetune.cli:preprocess_templates"
-generate-train-config = "aw_of3_finetune.cli:generate_train_config"
-split-dataset = "aw_of3_finetune.cli:split_dataset"
-finetune-pipeline = "aw_of3_finetune.cli:finetune_pipeline"
-validate-dataset = "aw_of3_finetune.cli:validate"
-finetune-report = "aw_of3_finetune.cli:finetune_report"
-setup-finetuning = "aw_of3_finetune.cli:setup_finetuning"
+prepare-inputs = "aw_of3_finetune.cli.prep:prepare_inputs"
+finetune-prep = "aw_of3_finetune.cli.prep:finetune_prep"
+materialize-dataset-cache = "aw_of3_finetune.cli.prep:materialize_dataset_cache"
+generate-msas = "aw_of3_finetune.cli.msas:generate_msas"
+import-msas = "aw_of3_finetune.cli.msas:import_msas"
+fetch-templates = "aw_of3_finetune.cli.templates:fetch_templates"
+preprocess-templates = "aw_of3_finetune.cli.templates:preprocess_templates"
+generate-train-config = "aw_of3_finetune.cli.training:generate_train_config"
+split-dataset = "aw_of3_finetune.cli.training:split_dataset"
+finetune-pipeline = "aw_of3_finetune.cli.pipeline:finetune_pipeline"
+validate-dataset = "aw_of3_finetune.cli.validate_dataset:validate"
+finetune-report = "aw_of3_finetune.cli.report:finetune_report"
+setup-finetuning = "aw_of3_finetune.cli.prep:setup_finetuning"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aw_of3_finetune"]

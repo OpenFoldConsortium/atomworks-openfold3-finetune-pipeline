@@ -1,4 +1,8 @@
-"""The validate-dataset command and how it drops failing entries."""
+"""The validate-dataset command: checks the finished dataset and drops failing entries.
+
+It runs the V0-V21 checks from aw_of3_finetune.validate. Checks on a command's arguments
+are in preflight.
+"""
 
 from __future__ import annotations
 

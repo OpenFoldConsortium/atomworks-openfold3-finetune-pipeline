@@ -28,7 +28,8 @@ from openfold3.projects.of3_all_atom.config.dataset_configs import (
 # class name with None.  Retrieve the actual class through the registry.
 WeightedPDBConfig = DATASET_CONFIG_REGISTRY.get("WeightedPDBDataset")
 
-from aw_of3_finetune.cli import finetune_pipeline, finetune_prep, materialize_dataset_cache
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.prep import finetune_prep, materialize_dataset_cache
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.pipeline import save_structures_as_npz
 from aw_of3_finetune.training_config import build_train_config

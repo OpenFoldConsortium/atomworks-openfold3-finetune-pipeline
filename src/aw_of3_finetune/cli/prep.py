@@ -10,7 +10,7 @@ import click
 from biotite.structure.io.pdbx import CIFFile
 
 from aw_of3_finetune.cleanup import CleanupSettings, EmptyStructureError
-from aw_of3_finetune.cli.checks import warn_missing_msas
+from aw_of3_finetune.cli.preflight import warn_missing_msas
 from aw_of3_finetune.cli.msas import reorganize_message
 from aw_of3_finetune.cli.options import (
     CCD_SOURCE_META_KEY,

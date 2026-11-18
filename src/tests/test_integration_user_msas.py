@@ -16,7 +16,7 @@ import yaml
 from atomworks.ml.preprocessing.msa.organizing import extract_first_sequence_from_msa
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import finetune_pipeline
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
 from aw_of3_finetune.msa import alignment_rep_id
 from aw_of3_finetune.msa_sources import read_msa_text
 from test_msa_sources import _of3_msa_rows

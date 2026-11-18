@@ -4,7 +4,7 @@ import shutil
 import pytest
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import prepare_inputs
+from aw_of3_finetune.cli.prep import prepare_inputs
 from aw_of3_finetune.prepare_inputs import LIGANDS_FILE
 from aw_of3_finetune.report.findings import Status
 from aw_of3_finetune.report.origin import PROCESSING, classify_origins

@@ -3,7 +3,8 @@
 import pytest
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import finetune_pipeline, finetune_report
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.report import finetune_report
 from aw_of3_finetune.report.build import REPORT_MARKER, build_report
 from aw_of3_finetune.report.user import ReportDirError, write_user_report
 from aw_of3_finetune.report.validity import ValidityInputs

@@ -23,13 +23,10 @@ from atomworks.ml.preprocessing.msa.finding import find_msas
 from atomworks.ml.preprocessing.msa.organizing import MSAOrganizationConfig, organize_msas
 from click.testing import CliRunner
 
-from aw_of3_finetune.cli import (
-    finetune_pipeline,
-    finetune_prep,
-    generate_msas,
-    generate_train_config,
-    import_msas,
-)
+from aw_of3_finetune.cli.msas import generate_msas, import_msas
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.prep import finetune_prep
+from aw_of3_finetune.cli.training import generate_train_config
 from aw_of3_finetune.training_config import discover_msa_sources, msa_settings_for_sources
 from openfold3.projects.of3_all_atom.config.dataset_config_components import MSASettings
 

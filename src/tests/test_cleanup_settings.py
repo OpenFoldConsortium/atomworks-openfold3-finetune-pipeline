@@ -13,7 +13,8 @@ from pydantic import ValidationError
 
 from assertions import write_emptiable_minimal_3aa
 from aw_of3_finetune.cleanup import CleanupSettings, clean_structure
-from aw_of3_finetune.cli import finetune_pipeline, finetune_prep
+from aw_of3_finetune.cli.pipeline import finetune_pipeline
+from aw_of3_finetune.cli.prep import finetune_prep
 from aw_of3_finetune.openfold_cache import write_stored_ccd_path
 from aw_of3_finetune.parsing import parse_structure
 

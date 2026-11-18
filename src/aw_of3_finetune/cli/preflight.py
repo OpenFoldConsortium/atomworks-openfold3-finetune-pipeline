@@ -1,4 +1,8 @@
-"""Checks that refuse a bad combination of inputs before a command does any work."""
+"""Preflight checks on a command's arguments, run before the command does any work.
+
+They refuse a bad combination of flags or an unusable MSA folder, and warn about missing
+MSAs. Checks on the finished dataset are in validate_dataset.
+"""
 
 from __future__ import annotations
 

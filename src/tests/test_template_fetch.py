@@ -27,8 +27,9 @@ from click.testing import CliRunner
 from openfold3.core.data.io.sequence.msa import parse_msas_direct, standardize_filepaths
 from requests.exceptions import SSLError
 
-from aw_of3_finetune.cli import fetch_templates as fetch_templates_cli
-from aw_of3_finetune.cli import finetune_prep, generate_msas
+from aw_of3_finetune.cli.templates import fetch_templates as fetch_templates_cli
+from aw_of3_finetune.cli.msas import generate_msas
+from aw_of3_finetune.cli.prep import finetune_prep
 from aw_of3_finetune.msa import alignment_rep_id, chain_canonical_sequences
 from aw_of3_finetune.pipeline import reorganize_msas_for_of3
 from aw_of3_finetune.templates import (
@@ -647,7 +648,7 @@ def test_fetch_templates_direct_download(ubq):
 
 def test_max_hits_defaults_to_50():
     """fetch-templates (and finetune-pipeline, which uses its defaults) resolves 50 hits per sequence."""
-    from aw_of3_finetune.cli import fetch_templates as fetch_templates_command
+    from aw_of3_finetune.cli.templates import fetch_templates as fetch_templates_command
 
     expected_default = 50
     actual_default = next(p.default for p in fetch_templates_command.params if p.name == "max_hits")
